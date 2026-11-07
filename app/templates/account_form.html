@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑账号' if account else '新增账号' }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ '编辑账号' if account else '新增账号' }}</h1>
+    <p class="page-sub">
+      {% if account %}{{ account.phone }} · 已累计充值 ¥{{ account.total_recharged|money }}
+      {% else %}新账号默认套餐 ¥399.00，开号自带 ¥500.00 余额{% endif %}
+    </p>
+  </div>
+  <div class="head-ops">
+    <a class="btn ghost" href="{{ '/accounts/' ~ account.id if account else '/' }}">返回</a>
+  </div>
+</div>
+
+<section class="panel form-panel">
+  <form method="post"
+        action="{{ ('/accounts/' ~ account.id ~ '/edit') if account else '/accounts/new' }}"
+        data-confirm
+        data-title="确认保存修改"
+        data-msg="确认保存这个账号的修改内容？">
+    <div class="grid">
+      <label>电话号码 <span class="req">*</span>
+        <input name="phone" required value="{{ account.phone if account else '' }}"
+               placeholder="例如 13800138000">
+      </label>
+      <label>宽带账号
+        <input name="broadband_account" value="{{ account.broadband_account if account else '' }}">
+      </label>
+      <label>宽带注册码
+        <input name="registration_code" value="{{ account.registration_code if account else '' }}">
+      </label>
+      <label>注册人
+        <input name="registrant" value="{{ account.registrant if account else '' }}">
+      </label>
+      <label>手机卡使用人
+        <input name="sim_user" value="{{ account.sim_user if account else '' }}"
+               placeholder="这张手机卡是谁在用">
+      </label>
+      <label>注册时间
+        <input type="datetime-local" name="registered_at"
+               value="{{ account.registered_at.strftime('%Y-%m-%dT%H:%M') if account and account.registered_at else '' }}">
+      </label>
+      <label>运营商
+        <input name="provider" value="{{ account.provider if account else '' }}" placeholder="电信 / 联通 / 移动">
+      </label>
+      <label>套餐原价（元）
+        <input type="number" step="0.01" min="0" name="monthly_fee" id="feeInput"
+               value="{{ account.monthly_fee if account else '399.00' }}">
+      </label>
+      <label>{{ '当前余额（元）' if account else '开号金额（元）' }}
+        <input type="number" step="0.01" min="0" name="balance"
+               value="{{ account.balance if account else '500.00' }}">
+        <small class="field-hint">
+          {% if account %}余额改动会记一笔调整流水{% else %}开号金额会计入「累计充值」{% endif %}
+        </small>
+      </label>
+      <label>状态
+        <select name="status">
+          {% for key, label in STATUS_LABELS.items() %}
+          <option value="{{ key }}" {{ 'selected' if account and account.status == key }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label class="switch-field {{ 'locked' if account and account.discount_enabled }}">
+      <input type="checkbox" name="discount_enabled" value="1" id="discountToggle"
+             {{ 'checked' if account and account.discount_enabled }}
+             {{ 'disabled' if account and account.discount_enabled }}>
+      <span class="switch-track"><span class="switch-thumb"></span></span>
+      <span class="switch-text">
+        <strong>套餐七折优惠</strong>
+        <small>
+          {% if account and account.discount_enabled %}
+            已于 {{ account.discount_enabled_at|datetime or '开号后开启' }} 开启，不可关闭
+          {% else %}
+            开启后按套餐原价的 70% 计费，<strong>开启后不可关闭</strong>
+          {% endif %}
+        </small>
+      </span>
+    </label>
+
+    <div class="fee-preview" id="feePreview"></div>
+
+    <label class="full">备注
+      <textarea name="notes" rows="3" placeholder="安装地址、套餐详情、注意事项等">{{ account.notes if account else '' }}</textarea>
+    </label>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">保存</button>
+      <a class="btn ghost" href="{{ '/accounts/' ~ account.id if account else '/' }}">取消</a>
+      {% if account %}
+      <button class="btn danger" type="button" onclick="deleteAccount({{ account.id }})">删除</button>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const toggle = document.getElementById('discountToggle');
+  const feeInput = document.getElementById('feeInput');
+  const preview = document.getElementById('feePreview');
+
+  function update() {
+    if (!toggle || !feeInput || !preview) return;
+    const base = parseFloat(feeInput.value) || 0;
+    const eff = toggle.checked ? base * 0.7 : base;
+    const now = new Date();
+    const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daily = eff / days;
+    preview.innerHTML = '实际月费 <strong>¥' + eff.toFixed(2) + '</strong>'
+      + (toggle.checked ? ' <span class="tag discount">7折</span>' : '')
+      + ' · 每日扣款约 <strong>¥' + daily.toFixed(2) + '</strong>'
+      + ' · 余额 ¥' + ((parseFloat(document.querySelector('[name="balance"]').value) || 0)).toFixed(2)
+      + ' 约可用 ' + (daily > 0 ? Math.floor((parseFloat(document.querySelector('[name="balance"]').value) || 0) / daily) : 0) + ' 天';
+  }
+
+  if (toggle) toggle.addEventListener('change', update);
+  if (feeInput) feeInput.addEventListener('input', update);
+  const balInput = document.querySelector('[name="balance"]');
+  if (balInput) balInput.addEventListener('input', update);
+  update();
+})();
+</script>
+{% endblock %}

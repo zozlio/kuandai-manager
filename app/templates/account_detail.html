@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}{{ account.phone }}{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>{{ account.phone }} <span class="badge {{ flags.level }}">{{ flags.badge }}</span></h1>
+    <div class="sub">
+      {{ account.provider or '未记录运营商' }} ·
+      宽带账号 {{ account.broadband_account or '未记录' }} ·
+      注册人 {{ account.registrant or '未记录' }}
+      {% if account.sim_user %} · 手机卡使用人 {{ account.sim_user }}{% endif %}
+      {% if flags.discount %} · <span class="tag discount">套餐 7 折</span>{% endif %}
+    </div>
+  </div>
+  <div class="head-ops">
+    <button class="btn primary" type="button"
+            onclick="rechargeAccount({{ account.id }}, '{{ account.phone }}', {{ flags.balance }}, {{ account.total_recharged }}, {{ flags.daily }})">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      充值
+    </button>
+    <a class="btn ghost" href="/accounts/{{ account.id }}/edit">编辑</a>
+    <a class="btn ghost" href="/">返回列表</a>
+  </div>
+</div>
+
+{% if request.query_params.get('error') %}
+<div class="alert error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<section class="stats">
+  <div class="stat {{ 'danger' if flags.low_balance }}">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
+        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">剩余余额</div>
+      <div class="stat-value {{ 'neg' if flags.low_balance }}">¥{{ account.balance|money }}</div>
+      <div class="stat-sub">每日扣款 ¥{{ flags.daily|money }}</div>
+    </div>
+  </div>
+
+  <div class="stat {{ 'warn' if flags.month_short }}">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 2v4M16 2v4"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">本月应收</div>
+      <div class="stat-value">¥{{ flags.fee|money }}</div>
+      <div class="stat-sub">
+        原价 ¥{{ account.monthly_fee|money }}{% if flags.discount %} · 已享 7 折{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="stat">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">累计充值</div>
+      <div class="stat-value">¥{{ account.total_recharged|money }}</div>
+      <div class="stat-sub">本月已扣 ¥{{ account.month_deducted_amount|money }}</div>
+    </div>
+  </div>
+
+  <div class="stat {{ 'danger' if flags.low_balance }}">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">预计可用</div>
+      <div class="stat-value">{{ (account.balance / flags.daily)|int if flags.daily > 0 else 0 }} 天</div>
+      <div class="stat-sub">本月还剩 {{ flags.days_left }} 天</div>
+    </div>
+  </div>
+</section>
+
+<div class="two-col">
+  <section class="panel">
+    <h2>套餐与扣费</h2>
+    <dl class="kv">
+      <div><dt>套餐原价</dt><dd>¥{{ account.monthly_fee|money }}</dd></div>
+      <div><dt>实际月费</dt>
+        <dd>¥{{ flags.fee|money }}{% if flags.discount %} <span class="tag discount">7折</span>{% endif %}</dd></div>
+      <div><dt>每日扣款</dt><dd>¥{{ flags.daily|money }}</dd></div>
+      <div><dt>七折开关</dt>
+        <dd>{% if flags.discount %}已开启{% if account.discount_enabled_at %}（{{ account.discount_enabled_at|datetime }}）{% endif %} · 不可关闭{% else %}未开启{% endif %}</dd></div>
+      <div><dt>最近扣费</dt><dd>{{ account.last_deducted_date or '尚未扣费' }}</dd></div>
+      <div><dt>开号时间</dt><dd>{{ account.registered_at|datetime or '未记录' }}</dd></div>
+      <div><dt>注册码</dt><dd class="mono">{{ account.registration_code or '未记录' }}</dd></div>
+      <div><dt>注册人</dt><dd>{{ account.registrant or '未记录' }}</dd></div>
+      <div><dt>手机卡使用人</dt><dd>{{ account.sim_user or '未记录' }}</dd></div>
+      <div><dt>备注</dt><dd>{{ account.notes or '—' }}</dd></div>
+    </dl>
+
+    <h2 class="mt">发起催缴</h2>
+    <form method="post" action="/accounts/{{ account.id }}/remind"
+          data-confirm data-title="确认发起催缴" data-msg="确认把这个账号加入催缴提醒列表？">
+      <label class="full">催缴话术（留空则用默认文案）
+        <textarea name="message" rows="2" placeholder="可以先在 AI 助手页生成话术，再复制到这里"></textarea>
+      </label>
+      <div class="form-actions">
+        <button class="btn" type="submit">加入提醒列表</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>催缴提醒</h2>
+    {% if reminders %}
+    <ul class="reminder-list">
+      {% for reminder in reminders %}
+      <li class="reminder-item {{ 'resolved' if reminder.status == 'resolved' }}">
+        <div class="reminder-head">
+          <span class="badge {{ 'danger' if reminder.kind == 'unpaid' else ('info' if reminder.kind == 'low_balance' else 'warn') }}">
+            {{ REMIND_LABELS.get(reminder.kind, reminder.kind) }}
+          </span>
+          <strong>¥{{ reminder.amount|money }}</strong>
+          <span class="muted">{{ reminder.created_at|datetime }}</span>
+        </div>
+        <p id="msg-{{ reminder.id }}" class="reminder-msg">{{ reminder.message or '（还没有话术）' }}</p>
+        <div class="reminder-ops">
+          {% if reminder.status == 'pending' %}
+          <button class="btn tiny" type="button" onclick="genText({{ reminder.id }}, this)">AI 生成话术</button>
+          <form method="post" action="/reminders/{{ reminder.id }}/resolve" style="display:inline"
+                data-confirm data-title="确认标记已处理" data-msg="确认这条提醒已经处理完了？">
+            <button class="btn tiny ghost" type="submit">标记已处理</button>
+          </form>
+          {% else %}
+          <span class="muted">已处理 · {{ reminder.resolved_at|datetime }}</span>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty small">这个账号还没有催缴记录。</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel">
+  <h2>收支流水</h2>
+  {% if transactions %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr><th>时间</th><th>类型</th><th class="num">金额</th><th>归属月份</th><th>备注</th></tr>
+      </thead>
+      <tbody>
+      {% for tx in transactions %}
+        <tr>
+          <td>{{ tx.created_at|datetime }}</td>
+          <td><span class="tag">{{ TX_LABELS.get(tx.kind, tx.kind) }}</span></td>
+          <td class="num {{ 'neg' if tx.kind == 'charge' }}">{% if tx.kind == 'charge' %}-{% else %}+{% endif %}¥{{ tx.amount|money }}</td>
+          <td>{{ tx.period or '—' }}</td>
+          <td>{{ tx.note or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty small">还没有流水记录。</div>
+  {% endif %}
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function genText(id, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  try {
+    const resp = await fetch(`/reminders/${id}/generate`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) {
+      alert('生成失败：' + data.error);
+    } else {
+      document.getElementById('msg-' + id).textContent = data.message;
+    }
+  } catch (err) {
+    alert('生成失败：' + err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+</script>
+{% endblock %}

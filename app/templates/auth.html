@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ '首次使用' if first_run else '登录' }} · kuandai-manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-body">
+<div class="auth-wrap">
+
+  <div class="auth-brand">
+    <span class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+      </svg>
+    </span>
+    <div>
+      <h1>宽带账号台账</h1>
+      <p>{{ '第一次使用，先给自己建一个账户' if first_run else '登录后才能查看台账' }}</p>
+    </div>
+  </div>
+
+  <div class="auth-cards">
+    {% if first_run %}
+    <section class="auth-card wide">
+      <h2>创建管理员账户</h2>
+      <p class="auth-sub">系统里还没有任何账户，先建一个你自己的。账户名和密码随便起，能记住就行。</p>
+      {% if register_error %}
+      <div class="alert error">{{ register_error }}</div>
+      {% endif %}
+      <form method="post" action="/register">
+        <label>账户名
+          <input name="username" required autofocus placeholder="随便起，比如 admin 或 张三">
+        </label>
+        <label>密码
+          <input name="password" type="password" required placeholder="你记得住的就行">
+        </label>
+        <button class="btn primary block" type="submit">创建账户并进入</button>
+      </form>
+    </section>
+    {% else %}
+    <section class="auth-card">
+      <h2>登录</h2>
+      {% if login_error %}
+      <div class="alert error">{{ login_error }}</div>
+      {% endif %}
+      <form method="post" action="/login">
+        <label>账户名
+          <input name="username" required autofocus placeholder="账户名">
+        </label>
+        <label>密码
+          <input name="password" type="password" required placeholder="密码">
+        </label>
+        <button class="btn primary block" type="submit">登录</button>
+      </form>
+    </section>
+
+    <section class="auth-card">
+      <h2>注册</h2>
+      {% if register_error %}
+      <div class="alert error">{{ register_error }}</div>
+      {% endif %}
+      <p class="auth-sub">还没有账户？注册一个就能进来看台账。账户名和密码不做格式限制。</p>
+      <form method="post" action="/register">
+        <label>账户名
+          <input name="username" required placeholder="账户名">
+        </label>
+        <label>密码
+          <input name="password" type="password" required placeholder="密码">
+        </label>
+        <button class="btn block" type="submit">注册并进入</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+
+  <p class="auth-foot">kuandai-manager · 数据保存在容器的 <code>/data</code> 目录</p>
+</div>
+</body>
+</html>
