@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}AI 助手{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>AI 助手</h1>
+    <p class="page-sub">
+      {{ '已接入 ' ~ ai.model ~ ' · AI 只能看到你的真实台账，不会编造数据' if ai.configured else '未配置 AI 接口，配置后即可用大白话查询' }}
+    </p>
+  </div>
+  {% if not ai.configured %}
+  <div class="head-ops">
+    <a class="btn primary" href="/settings">去设置</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if not ai.configured %}
+<div class="alert warn">
+  AI 功能未启用。到 <a href="/settings">「设置」页</a> 填上接口地址、密钥和模型名就能用，
+  填完立刻生效，不用重启容器。
+</div>
+{% endif %}
+
+<section class="panel chat-panel">
+  <div class="chips">
+    <button class="chip" onclick="ask('哪些账号需要催缴？')">哪些账号需要催缴？</button>
+    <button class="chip" onclick="ask('这个月一共要交多少钱？')">这个月一共要交多少钱？</button>
+    <button class="chip" onclick="ask('所有账号的余额加起来是多少？')">余额总和是多少？</button>
+    <button class="chip" onclick="ask('哪些账号是本月还没扣费的？')">本月还没扣费的有哪些？</button>
+  </div>
+
+  <form id="chat-form" onsubmit="return false;">
+    <textarea id="question" rows="3"
+              placeholder="用大白话问，比如「13800138000 这个账号现在什么情况」「谁欠费最多」"></textarea>
+    <div class="chat-actions">
+      <button class="btn primary" onclick="ask()">提问</button>
+      <span class="muted">也可以直接输入手机号定位到具体账号</span>
+    </div>
+  </form>
+
+  <div id="answer" class="answer"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const answerBox = document.getElementById('answer');
+
+async function ask(text) {
+  const input = document.getElementById('question');
+  const question = (text !== undefined ? text : input.value).trim();
+  if (!question) { input.focus(); return; }
+  input.value = question;
+  answerBox.textContent = 'AI 正在查台账…';
+  answerBox.classList.add('loading');
+
+  const fd = new FormData();
+  fd.append('question', question);
+  try {
+    const resp = await fetch('/api/chat', { method: 'POST', body: fd });
+    const data = await resp.json();
+    answerBox.classList.remove('loading');
+    answerBox.textContent = data.error ? ('出错了：' + data.error) : data.answer;
+  } catch (err) {
+    answerBox.classList.remove('loading');
+    answerBox.textContent = '出错了：' + err;
+  }
+}
+
+document.getElementById('chat-form').addEventListener('keydown', function (e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { ask(); }
+});
+</script>
+{% endblock %}

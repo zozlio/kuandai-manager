@@ -1,0 +1,23 @@
+# kuandai-manager —— 飞牛 fnOS Docker 面板「项目」用
+#
+# 前提：镜像已经构建好（kuandai-manager:latest）
+#   docker build -t kuandai-manager:latest .
+# 用法：面板里 Docker → 项目 → 创建项目 → 指向本文件 → 启动
+
+services:
+  kuandai-manager:
+    image: kuandai-manager:latest
+    container_name: kuandai-manager
+    restart: unless-stopped
+    ports:
+      # 左边是 NAS 上的端口。8080 已被飞牛网页端占用，所以用 18080
+      - "18080:8080"
+    volumes:
+      # 左边换成你 NAS 上的实际路径（数据、账户都在这里，备份就复制这个目录）
+      - /vol1/1000/docker/kuandai-data:/data
+    environment:
+      # MiniMax 中国版。不填密钥的话，进去后在左侧「设置」页填也一样生效
+      AI_BASE_URL: "https://api.minimaxi.com/v1"
+      AI_MODEL: "MiniMax-M3"
+      AI_API_KEY: ""
+      TZ: "Asia/Shanghai"

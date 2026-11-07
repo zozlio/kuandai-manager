@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}台账{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>宽带账号台账</h1>
+    <p class="page-sub">
+      {{ stats.today }} · 共 {{ stats.total }} 个账号
+      {% if stats.pending_reminders %}· <strong style="color:var(--danger)">{{ stats.pending_reminders }} 条待处理提醒</strong>{% else %}· 暂无待处理提醒{% endif %}
+    </p>
+  </div>
+  <div class="head-ops">
+    <form method="post" action="/admin/run-billing"
+          onsubmit="return confirm('立即执行一次日扣费与提醒巡检？');">
+      <button class="btn ghost" type="submit">立即巡检</button>
+    </form>
+    <a class="btn primary" href="/accounts/new">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      新增账号
+    </a>
+  </div>
+</div>
+
+<section class="stats">
+  <div class="stat">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">账号总数</div>
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-sub">正常 {{ stats.active }} 个</div>
+    </div>
+  </div>
+
+  <div class="stat {{ 'danger' if stats.low_balance }}">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">余额不足</div>
+      <div class="stat-value">{{ stats.low_balance }}</div>
+      <div class="stat-sub">另有 {{ stats.month_short }} 个余额偏少</div>
+    </div>
+  </div>
+
+  <div class="stat">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">今日扣款</div>
+      <div class="stat-value">¥{{ stats.daily_total|money }}</div>
+      <div class="stat-sub">已扣 {{ stats.charged_today }} / {{ stats.active }} 个</div>
+    </div>
+  </div>
+
+  <div class="stat">
+    <span class="stat-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
+        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
+      </svg>
+    </span>
+    <div class="stat-body">
+      <div class="stat-label">累计充值</div>
+      <div class="stat-value">¥{{ stats.total_recharged|money }}</div>
+      <div class="stat-sub">本月应收 ¥{{ stats.monthly_total|money }}</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="toolbar">
+    <form method="get" action="/" class="search-form">
+      <input type="text" name="keyword" value="{{ keyword }}"
+             placeholder="搜索手机号 / 宽带账号 / 注册码 / 注册人 / 手机卡使用人">
+      <input type="hidden" name="status" value="{{ status }}">
+      <button class="btn" type="submit">搜索</button>
+      {% if keyword %}<a class="btn ghost" href="{{ '/?status=' ~ status if status else '/' }}">清空</a>{% endif %}
+    </form>
+    <div class="toolbar-right">
+      <span class="muted">{{ rows|length }} 条记录</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a href="/" class="{{ 'active' if status == '' }}">全部</a>
+    <a href="/?status=remind" class="{{ 'active' if status == 'remind' }}">需催缴</a>
+    <a href="/?status=active" class="{{ 'active' if status == 'active' }}">正常</a>
+    <a href="/?status=suspended" class="{{ 'active' if status == 'suspended' }}">已暂停</a>
+    <a href="/?status=closed" class="{{ 'active' if status == 'closed' }}">已注销</a>
+  </div>
+
+  {% if rows %}
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>操作</th>
+          <th>手机号</th>
+          <th>宽带账号</th>
+          <th class="num">月费</th>
+          <th class="num">余额</th>
+          <th class="num">累计充值</th>
+          <th>宽带注册码</th>
+          <th>注册人</th>
+          <th>手机卡使用人</th>
+          <th>注册时间</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td class="ops">
+            <a href="/accounts/{{ row.account.id }}">详情</a>
+            <a href="/accounts/{{ row.account.id }}/edit">编辑</a>
+            <button type="button" class="btn tiny charge-btn"
+                    onclick="rechargeAccount({{ row.account.id }}, '{{ row.account.phone }}', {{ row.flags.balance }}, {{ row.account.total_recharged }}, {{ row.flags.daily }})">充值</button>
+          </td>
+          <td class="strong"><a href="/accounts/{{ row.account.id }}">{{ row.account.phone }}</a></td>
+          <td class="mono">{{ row.account.broadband_account or '—' }}</td>
+          <td class="num">
+            {% if row.flags.discount %}<span class="tag discount">7折</span>{% endif %}
+            ¥{{ row.flags.fee|money }}
+          </td>
+          <td class="num {{ 'neg' if row.flags.low_balance }}">¥{{ row.flags.balance|money }}</td>
+          <td class="num">¥{{ row.account.total_recharged|money }}</td>
+          <td class="mono">{{ row.account.registration_code or '—' }}</td>
+          <td>{{ row.account.registrant or '—' }}</td>
+          <td>{{ row.account.sim_user or '—' }}</td>
+          <td class="muted">{{ row.account.registered_at|datetime or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">
+      <span class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 15h8"/>
+        </svg>
+      </span>
+      {% if keyword or status %}没有符合条件的记录。{% else %}还没有记录，点右上角「新增账号」开始记账。{% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

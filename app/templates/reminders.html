@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}提醒{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>催缴提醒</h1>
+    <p class="page-sub">
+      {% if stats.pending_reminders %}
+      有 <strong style="color:var(--danger)">{{ stats.pending_reminders }}</strong> 条待处理提醒，按金额从高到低跟进
+      {% else %}当前没有待处理的催缴事项{% endif %}
+    </p>
+  </div>
+  <div class="head-ops">
+    <button class="btn ghost" type="button" onclick="batchAdvice()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+      </svg>
+      AI 批量催缴建议
+    </button>
+  </div>
+</div>
+
+<div id="advice" class="advice {{ 'show' if false }}"></div>
+
+<div class="tabs">
+  <a href="/reminders?scope=pending" class="{{ 'active' if scope != 'resolved' }}">待处理</a>
+  <a href="/reminders?scope=resolved" class="{{ 'active' if scope == 'resolved' }}">已处理</a>
+</div>
+
+<section class="panel">
+  {% if rows %}
+  <ul class="reminder-list">
+    {% for row in rows %}
+    <li class="reminder-item {{ 'resolved' if row.reminder.status == 'resolved' }}">
+      <div class="reminder-head">
+        <span class="badge {{ 'danger' if row.reminder.kind == 'unpaid' else ('info' if row.reminder.kind == 'low_balance' else 'warn') }}">
+          {{ REMIND_LABELS.get(row.reminder.kind, row.reminder.kind) }}
+        </span>
+        <a href="/accounts/{{ row.account.id }}" class="strong">{{ row.account.phone }}</a>
+        <span class="muted">{{ row.account.broadband_account or '未记录账号' }}</span>
+        <strong class="amount">¥{{ row.reminder.amount|money }}</strong>
+        <span class="muted">余额 ¥{{ row.account.balance|money }} / 月费 ¥{{ row.flags.fee|money }} / 日扣 ¥{{ row.flags.daily|money }}</span>
+        <span class="muted">{{ row.reminder.created_at|datetime }}</span>
+      </div>
+      <p id="msg-{{ row.reminder.id }}" class="reminder-msg">{{ row.reminder.message or '（还没有话术）' }}</p>
+      <div class="reminder-ops">
+        {% if row.reminder.status == 'pending' %}
+        <button class="btn tiny" onclick="genText({{ row.reminder.id }}, this)">AI 生成话术</button>
+        <form method="post" action="/reminders/{{ row.reminder.id }}/resolve" style="display:inline">
+          <button class="btn tiny ghost" type="submit">标记已处理</button>
+        </form>
+        <a class="btn tiny ghost" href="/accounts/{{ row.account.id }}">去处理</a>
+        {% else %}
+        <span class="muted">已处理 · {{ row.reminder.resolved_at|datetime }}</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">
+    <span class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    </span>
+    {% if scope == 'resolved' %}没有已处理的提醒。{% else %}当前没有待处理的催缴提醒。{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function genText(id, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  try {
+    const resp = await fetch(`/reminders/${id}/generate`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) {
+      alert('生成失败：' + data.error);
+    } else {
+      document.getElementById('msg-' + id).textContent = data.message;
+    }
+  } catch (err) {
+    alert('生成失败：' + err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+async function batchAdvice() {
+  const box = document.getElementById('advice');
+  box.classList.add('show');
+  box.textContent = 'AI 正在分析…';
+  try {
+    const resp = await fetch('/api/collection-advice', { method: 'POST' });
+    const data = await resp.json();
+    box.textContent = data.error ? ('出错了：' + data.error) : data.advice;
+  } catch (err) {
+    box.textContent = '出错了：' + err;
+  }
+}
+</script>
+{% endblock %}
