@@ -28,6 +28,38 @@
 
 ---
 
+## 界面预览
+
+### 台账列表
+
+![台账列表](preview/index.svg)
+
+### 充值弹窗（金额输入 + 实时预览充值后余额）
+
+![充值弹窗](preview/recharge.svg)
+
+### 账号详情与收支流水
+
+![账号详情](preview/detail.svg)
+
+### 新增 / 编辑账号
+
+![账号表单](preview/form.svg)
+
+### 催缴提醒
+
+![催缴提醒](preview/reminders.svg)
+
+### AI 助手
+
+![AI 助手](preview/chat.svg)
+
+### 设置页（AI 接口接入）
+
+![设置页](preview/settings.svg)
+
+---
+
 ## 飞牛 fnOS NAS 部署（本项目在 fnOS 上实测部署成功）
 
 > 下面的 IP、端口、目录按你自己的 NAS 改。示例用的是常见的 fnOS 约定路径。
