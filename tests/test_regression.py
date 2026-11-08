@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import database, services, vision  # noqa: E402
+from app import __version__ as APP_VERSION  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import (  # noqa: E402
     ABNORMAL_REASONS,
@@ -1163,6 +1164,45 @@ class HttpTest(unittest.TestCase):
             self.assertEqual(account.balance, Decimal("90.00"))
         finally:
             db.close()
+
+
+class TestVersion(unittest.TestCase):
+    """版本号要真的露出来：/healthz 报版本，页面页脚显示版本。"""
+
+    def setUp(self):
+        db = database._session_factory()
+        try:
+            db.query(DailyIncome).delete()
+            db.query(Account).delete()
+            db.query(User).delete()
+            db.commit()
+        finally:
+            db.close()
+        self.client = TestClient(app)
+        self.client.post("/register", data={"username": "tester", "password": "test1234"})
+
+    def tearDown(self):
+        self.client.close()
+
+    def test_healthz_reports_version(self):
+        resp = self.client.get("/healthz")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("version"), APP_VERSION)
+
+    def test_footer_shows_version(self):
+        home = self.client.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertIn(f"kuandai-manager v{APP_VERSION}", home.text)
+
+    def test_changelog_documents_current_version(self):
+        """更新日志里要有当前版本的条目，升级说明不能漏。"""
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        changelog = os.path.join(root, "CHANGELOG.md")
+        self.assertTrue(os.path.exists(changelog), "缺少 CHANGELOG.md")
+        with open(changelog, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn(f"v{APP_VERSION}", text)
+        self.assertIn("升级步骤", text)
 
 
 if __name__ == "__main__":

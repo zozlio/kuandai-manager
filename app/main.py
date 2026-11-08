@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from . import ai, auth, exporting, services, vision
+from . import __version__ as APP_VERSION
 from .config import get_settings
 from .database import get_db, init_engine
 from .models import (
@@ -63,6 +64,7 @@ templates.env.filters["datetime"] = services.fmt_dt
 templates.env.globals["STATUS_LABELS"] = STATUS_LABELS
 templates.env.globals["PROVIDERS"] = PROVIDERS
 templates.env.globals["TX_LABELS"] = TX_LABELS
+templates.env.globals["APP_VERSION"] = APP_VERSION
 templates.env.globals["REMIND_LABELS"] = REMIND_LABELS
 templates.env.globals["ABNORMAL_REASONS"] = ABNORMAL_REASONS
 templates.env.globals["CATEGORY_LABELS"] = CATEGORY_LABELS
@@ -1395,7 +1397,7 @@ def api_accounts(db: Session = Depends(get_db)):
 
 @app.get("/healthz")
 def healthz(db: Session = Depends(get_db)):
-    return {"status": "ok", "ai": ai.ai_status(services.get_ai_config(db))["configured"]}
+    return {"status": "ok", "ai": ai.ai_status(services.get_ai_config(db))["configured"], "version": APP_VERSION}
 
 
 # --------------------------------------------------------------------------

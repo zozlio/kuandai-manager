@@ -2,6 +2,8 @@
 
 宽带账号台账 + 充值提醒 + AI 助手，一个 Docker 容器搞定。
 
+**当前版本 v1.1.0** ｜ 改动明细与升级步骤见 [CHANGELOG.md](CHANGELOG.md)
+
 给宽带代办点/运维人员用：把每个电话号码绑定的宽带账号、注册码、注册人、注册时间、
 套餐费和剩余金额集中记下来，系统**每天按套餐自动扣一点余额**、余额不够自动生成催缴提醒，
 还能直接用大白话问 AI。
@@ -131,6 +133,30 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ### 新版：数据导出（CSV + 全量备份）
 
 ![数据导出](preview/export.svg)
+
+---
+
+## 从旧版本升级（v1.0.0 → v1.1.0）
+
+v1.1.0 改动了数据结构（`nodes` 表拆成账号上的机房 / 平台 / 节点号三个字段），
+但**不用手动跑任何脚本**：新版本第一次启动会自己迁移。
+
+```bash
+# 1. 先备份（迁移不可逆，务必做）
+cp -a /vol1/1000/docker/kuandai-data /vol1/1000/docker/kuandai-data-backup
+
+# 2. 拿新镜像
+docker pull ghcr.io/zozlio/kuandai-manager:latest
+
+# 3. 换容器（数据目录原样挂回去，别动里面的文件）
+docker stop kuandai-manager && docker rm kuandai-manager
+docker run -d --name kuandai-manager --restart unless-stopped \
+  -p 18080:8080 -v /vol1/1000/docker/kuandai-data:/data \
+  -e TZ=Asia/Shanghai kuandai-manager:latest
+```
+
+打开 <http://192.168.1.10:18080> 等它迁移完（开头几秒转圈正常），机房 / 平台 / 节点号会自动填好。
+完整的改动清单、注意事项和回滚办法见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
