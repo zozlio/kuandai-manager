@@ -7,3 +7,9 @@ __pycache__/
 data/
 .env
 .DS_Store
+
+# 本地预览数据
+.localdata/
+
+# 预览图：仓库只收 SVG（内嵌 PNG），原始 PNG 不入库
+preview/*.png
