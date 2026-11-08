@@ -1,0 +1,89 @@
+name: 打包并发布镜像
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 推到 GitHub Container Registry（ghcr.io），公开可拉取
+  publish:
+    name: 推送到 ghcr.io
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # CI 在海外跑，用官方源更稳；本地/国内构建用 Dockerfile 默认的国内镜像站
+          build-args: |
+            PYTHON_IMAGE=python:3.13-slim
+            DEBIAN_MIRROR=
+            PIP_INDEX_URL=https://pypi.org/simple/
+            PIP_TRUSTED_HOST=pypi.org
+
+  # 打成 tar.gz 存进 Actions Artifacts，方便离线下载
+  package:
+    name: 打包 tar.gz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 构建并导出镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: kuandai-manager:latest
+          cache-from: type=gha
+          build-args: |
+            PYTHON_IMAGE=python:3.13-slim
+            DEBIAN_MIRROR=
+            PIP_INDEX_URL=https://pypi.org/simple/
+            PIP_TRUSTED_HOST=pypi.org
+
+      - name: 导出 tar.gz
+        run: |
+          docker save kuandai-manager:latest | gzip -1 > kuandai-manager-image.tar.gz
+          ls -lh kuandai-manager-image.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kuandai-manager-image
+          path: kuandai-manager-image.tar.gz
+          retention-days: 30
