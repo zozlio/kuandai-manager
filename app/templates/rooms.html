@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}机房{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>机房与收入</h1>
+    <p class="page-sub">
+      按机房分组，机房下面是节点平台，平台下面是宽带账号和节点号 ·
+      共 {{ accounts|length }} 条宽带
+    </p>
+  </div>
+  <div class="head-ops">
+    <a class="btn" href="/accounts/new">新增账号</a>
+    <a class="btn primary" href="/recognize">AI 识图录入</a>
+  </div>
+</div>
+
+<section class="kpis">
+  <div class="kpi">
+    <div class="kpi-label">今日收入</div>
+    <div class="kpi-value">¥{{ today_income|money }}</div>
+    <div class="kpi-sub">统计日 {{ day }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">今日每日扣费</div>
+    <div class="kpi-value">¥{{ today_cost|money }}</div>
+    <div class="kpi-sub">所有宽带账号合计</div>
+  </div>
+  <div class="kpi {{ 'good' if today_profit > 0 else ('bad' if today_profit < 0 else '') }}">
+    <div class="kpi-label">今日净利润</div>
+    <div class="kpi-value">¥{{ today_profit|money }}</div>
+    <div class="kpi-sub">收入 − 扣费</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">机房数</div>
+    <div class="kpi-value">{{ rooms|length }}</div>
+    <div class="kpi-sub">共 {{ accounts|length }} 条宽带</div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="toolbar">
+    <form method="get" action="/rooms" class="search-form">
+      <input type="date" name="day" value="{{ day }}">
+      <button class="btn" type="submit">看这天</button>
+    </form>
+    <div class="toolbar-right">
+      <span class="muted">点「记收入」录入某条宽带某天的收入</span>
+    </div>
+  </div>
+
+  {% if rooms %}
+    {% for room_name, platforms in rooms.items() %}
+    <div class="room-group">
+      <div class="room-title">
+        <span class="room-name">{{ room_name }}</span>
+        <span class="muted small">
+          {{ platforms.values()|map('length')|sum }} 条宽带 ·
+          {{ platforms|length }} 个平台
+        </span>
+      </div>
+
+      {% for platform_name, rows in platforms.items() %}
+      <div class="platform-block">
+        <div class="platform-title">
+          <span class="tag">{{ platform_name }}</span>
+          <span class="muted small">{{ rows|length }} 条宽带</span>
+        </div>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>操作</th>
+                <th>宽带账号</th>
+                <th>节点号</th>
+                <th class="num">{{ day }} 收入</th>
+                <th>最近几天</th>
+                <th>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="ops">
+                  <button type="button" class="btn tiny"
+                          onclick="recordIncome({{ row.account.id }}, '{{ row.account.phone }}', '{{ day }}')">记收入</button>
+                  <a href="/accounts/{{ row.account.id }}">详情</a>
+                </td>
+                <td class="strong">
+                  <a href="/accounts/{{ row.account.id }}">{{ row.account.phone }}</a>
+                  <button type="button" class="copy-btn" title="复制手机号"
+                          onclick="copyText('{{ row.account.phone }}', this)"
+                          aria-label="复制手机号">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="12" height="12" rx="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <div class="muted small mono">
+                    {% if row.account.broadband_account %}
+                      {{ row.account.broadband_account }}
+                      <button type="button" class="copy-btn" title="复制宽带账号"
+                              onclick="copyText('{{ row.account.broadband_account }}', this)"
+                              aria-label="复制宽带账号">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="9" y="9" width="12" height="12" rx="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                      </button>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </div>
+                </td>
+                <td class="mono">
+                  {% if row.account.node_account %}
+                    {{ row.account.node_account }}
+                    <button type="button" class="copy-btn" title="复制节点号"
+                            onclick="copyText('{{ row.account.node_account }}', this)"
+                            aria-label="复制节点号">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                           stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="12" height="12" rx="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="num income">¥{{ row.income|money }}</td>
+                <td class="muted small">
+                  {% for inc in row.incomes[:4] %}
+                    <div>{{ inc.day }} · ¥{{ inc.amount|money }}</div>
+                  {% else %}
+                    <span>还没有收入记录</span>
+                  {% endfor %}
+                </td>
+                <td class="muted small">{{ row.account.notes or '—' }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty">
+    <span class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/>
+        <path d="M6 7h.01M6 17h.01"/>
+      </svg>
+    </span>
+    还没有宽带账号。点「新增账号」建一条，填上机房、节点平台和节点号。
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.recordIncome = async function (accountId, phone, day) {
+    const result = await showModal({
+      title: '记收入：' + phone,
+      okText: '记上',
+      body: `
+        <div class="modal-field">
+          <label>日期</label>
+          <input id="incDay" type="date" value="${day}">
+        </div>
+        <div class="modal-field">
+          <label>收入金额（元）</label>
+          <input id="incAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="modal-field">
+          <label>备注（可留空）</label>
+          <input id="incNote" type="text" placeholder="例如 平台结算">
+        </div>`,
+      onMount: () => document.getElementById('incAmount').focus(),
+      onOk: () => {
+        const amount = parseFloat(document.getElementById('incAmount').value);
+        if (!amount && amount !== 0) { showFieldError('填一下收入金额'); return false; }
+        return {
+          day: document.getElementById('incDay').value,
+          amount: amount,
+          note: document.getElementById('incNote').value.trim(),
+        };
+      },
+    });
+    if (!result) return;
+
+    const fd = new FormData();
+    fd.append('day', result.day);
+    fd.append('amount', result.amount);
+    fd.append('note', result.note);
+    const res = await fetch('/api/accounts/' + accountId + '/income', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '记录失败'); return; }
+    location.reload();
+  };
+</script>
+{% endblock %}

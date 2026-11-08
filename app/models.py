@@ -21,6 +21,50 @@ STATUS_LABELS = {
     STATUS_CLOSED: "已注销",
 }
 
+# 常见运营商：账号表单里用下拉框选，不用手打
+PROVIDERS = [
+    "中国电信",
+    "中国联通",
+    "中国移动",
+    "中国广电",
+    "铁通",
+    "长城宽带",
+    "鹏博士",
+    "其他",
+]
+
+# ---------------------------------------------------------------------------
+# 账号分类：正常账号 / 异常账号
+# ---------------------------------------------------------------------------
+CATEGORY_NORMAL = "normal"
+CATEGORY_ABNORMAL = "abnormal"
+
+CATEGORY_LABELS = {
+    CATEGORY_NORMAL: "正常账号",
+    CATEGORY_ABNORMAL: "异常账号",
+}
+
+# 异常原因（标记异常时六选一）
+ABNORMAL_REASONS = {
+    "machine_room": "机房",
+    "power": "当前电费",
+    "manage_line": "管理线",
+    "throttle": "限速",
+    "cancel": "注销",
+    "arrears": "欠费",
+}
+
+# ---------------------------------------------------------------------------
+# 每日收入来源
+# ---------------------------------------------------------------------------
+INCOME_SOURCE_MANUAL = "manual"
+INCOME_SOURCE_AI = "ai"
+
+INCOME_SOURCE_LABELS = {
+    INCOME_SOURCE_MANUAL: "手工录入",
+    INCOME_SOURCE_AI: "AI 识图",
+}
+
 # 流水类型
 TX_CHARGE = "charge"      # 月度套餐费扣费
 TX_RECHARGE = "recharge"  # 充值
@@ -66,6 +110,37 @@ class Account(Base):
     status: Mapped[str] = mapped_column(String(16), default=STATUS_ACTIVE, comment="账号状态")
     notes: Mapped[str] = mapped_column(Text, default="", comment="备注")
 
+    # --- 分类 / 分组 / 安装地址 ---
+    category: Mapped[str] = mapped_column(
+        String(16), default=CATEGORY_NORMAL, index=True, comment="正常账号 / 异常账号"
+    )
+    abnormal_reason: Mapped[str] = mapped_column(String(32), default="", comment="异常原因")
+    abnormal_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True, comment="标记异常的时间"
+    )
+    abnormal_note: Mapped[str] = mapped_column(Text, default="", comment="异常说明")
+    group_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True, comment="所属分组"
+    )
+    install_address: Mapped[str] = mapped_column(
+        String(255), default="", comment="宽带安装地址"
+    )
+    daily_cost: Mapped[float] = mapped_column(
+        Numeric(12, 2), default=0, comment="每日扣费（0 表示按月费分摊）"
+    )
+
+    # --- 机房 / 节点平台 / 节点号 ---
+    # 层级：机房 → 节点平台 → 宽带账号 ＋ 节点号（账号与节点号一一对应）
+    room: Mapped[str] = mapped_column(
+        String(128), index=True, default="", comment="所在机房"
+    )
+    platform: Mapped[str] = mapped_column(
+        String(128), index=True, default="", comment="节点平台"
+    )
+    node_account: Mapped[str] = mapped_column(
+        String(128), index=True, default="", comment="节点号（服务器上的账号）"
+    )
+
     # --- 优惠与计费 ---
     discount_enabled: Mapped[bool] = mapped_column(Boolean, default=False, comment="七折开关（开启后不可关闭）")
     discount_enabled_at: Mapped[Optional[datetime]] = mapped_column(
@@ -90,6 +165,15 @@ class Account(Base):
     )
     reminders: Mapped[list["Reminder"]] = relationship(
         back_populates="account", cascade="all, delete-orphan"
+    )
+    incomes: Mapped[list["DailyIncome"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
+    group: Mapped[Optional["AccountGroup"]] = relationship(
+        back_populates="accounts",
+        primaryjoin="Account.group_id == AccountGroup.id",
+        foreign_keys="Account.group_id",
+        viewonly=True,
     )
 
     __table_args__ = (Index("ix_accounts_phone_status", "phone", "status"),)
@@ -158,3 +242,64 @@ class Reminder(Base):
     account: Mapped["Account"] = relationship(back_populates="reminders")
 
     __table_args__ = (Index("ix_reminders_status_kind", "status", "kind"),)
+
+
+class AccountGroup(Base):
+    """正常账号分组。
+
+    分组本身是标签，组上可以记安装地点和管理线信息
+    （管理线信息 = 注册手机号 / 宽带账号 / 到期时间）。
+    """
+
+    __tablename__ = "account_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), index=True, comment="分组名称")
+    install_location: Mapped[str] = mapped_column(
+        String(255), default="", comment="安装地点"
+    )
+    manage_phone: Mapped[str] = mapped_column(
+        String(32), default="", comment="管理线注册手机号"
+    )
+    manage_account: Mapped[str] = mapped_column(
+        String(128), default="", comment="管理线宽带账号"
+    )
+    manage_expire_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True, comment="管理线到期时间"
+    )
+    note: Mapped[str] = mapped_column(Text, default="", comment="备注")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    accounts: Mapped[list["Account"]] = relationship(
+        back_populates="group",
+        primaryjoin="Account.group_id == AccountGroup.id",
+        foreign_keys="Account.group_id",
+        viewonly=True,
+    )
+
+
+class DailyIncome(Base):
+    """宽带账号某一天的收益金额。
+
+    账号与节点号一一对应，所以收益直接记在账号上：
+    同一条宽带同一天只保留一条（重复录入会覆盖）。
+    """
+
+    __tablename__ = "daily_incomes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", ondelete="CASCADE"), index=True
+    )
+
+    day: Mapped[str] = mapped_column(String(10), index=True, comment="日期 YYYY-MM-DD")
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, comment="当天收入")
+    source: Mapped[str] = mapped_column(
+        String(16), default=INCOME_SOURCE_MANUAL, comment="来源：manual / ai"
+    )
+    note: Mapped[str] = mapped_column(Text, default="", comment="备注")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    account: Mapped["Account"] = relationship(back_populates="incomes")
+
+    __table_args__ = (Index("ix_daily_incomes_account_day", "account_id", "day"),)

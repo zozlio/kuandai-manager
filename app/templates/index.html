@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}台账{% endblock %}
+{% block title %}{{ '正常账号' if tab == 'normal' else '异常账号' }}{% endblock %}
 {% block content %}
 
 <div class="page-head">
   <div>
-    <h1>宽带账号台账</h1>
+    <h1>{{ '正常账号' if tab == 'normal' else '异常账号' }}</h1>
     <p class="page-sub">
-      {{ stats.today }} · 共 {{ stats.total }} 个账号
-      {% if stats.pending_reminders %}· <strong style="color:var(--danger)">{{ stats.pending_reminders }} 条待处理提醒</strong>{% else %}· 暂无待处理提醒{% endif %}
+      {{ dashboard.today }} · {{ dashboard.account_count }} 条宽带 ·
+      {{ dashboard.node_count }} 个节点号
+      {% if stats.pending_reminders %}· <strong style="color:var(--danger)">{{ stats.pending_reminders }} 条待处理提醒</strong>{% endif %}
     </p>
   </div>
   <div class="head-ops">
@@ -15,72 +16,93 @@
           onsubmit="return confirm('立即执行一次日扣费与提醒巡检？');">
       <button class="btn ghost" type="submit">立即巡检</button>
     </form>
-    <a class="btn primary" href="/accounts/new">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-           stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      新增账号
-    </a>
+    <a class="btn" href="/rooms">机房</a>
+    <a class="btn" href="/recognize">AI 识图</a>
+    <a class="btn primary" href="/accounts/new">新增账号</a>
   </div>
 </div>
 
-<section class="stats">
-  <div class="stat">
-    <span class="stat-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    </span>
-    <div class="stat-body">
-      <div class="stat-label">账号总数</div>
-      <div class="stat-value">{{ stats.total }}</div>
-      <div class="stat-sub">正常 {{ stats.active }} 个</div>
+<div class="cat-tabs">
+  <a href="/?tab=normal" class="cat-tab normal {{ 'active' if tab == 'normal' }}">
+    <span class="cat-name">正常账号</span>
+    <span class="cat-count">{{ stats.normal }}</span>
+  </a>
+  <a href="/?tab=abnormal" class="cat-tab abnormal {{ 'active' if tab == 'abnormal' }}">
+    <span class="cat-name">异常账号</span>
+    <span class="cat-count">{{ stats.abnormal }}</span>
+  </a>
+</div>
+
+<section class="kpis">
+  <div class="kpi">
+    <div class="kpi-label">今日平台收入</div>
+    <div class="kpi-value">¥{{ dashboard.today_income|money }}</div>
+    <div class="kpi-sub">近 {{ dashboard.days }} 天共 ¥{{ dashboard.window_total|money }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">今日每日扣费</div>
+    <div class="kpi-value">¥{{ dashboard.today_cost|money }}</div>
+    <div class="kpi-sub">所有宽带账号合计</div>
+  </div>
+  <div class="kpi {{ 'good' if dashboard.today_profit > 0 else ('bad' if dashboard.today_profit < 0 else '') }}">
+    <div class="kpi-label">今日净利润</div>
+    <div class="kpi-value">¥{{ dashboard.today_profit|money }}</div>
+    <div class="kpi-sub">收入 − 扣费</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">累计收入</div>
+    <div class="kpi-value">¥{{ dashboard.total_income|money }}</div>
+    <div class="kpi-sub">全部历史</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">剩余余额</div>
+    <div class="kpi-value">¥{{ dashboard.total_balance|money }}</div>
+    <div class="kpi-sub">
+      全部 {{ dashboard.all_account_count }} 条宽带账面余额合计
+      （正常 ¥{{ dashboard.normal_balance|money }} · 异常 ¥{{ dashboard.abnormal_balance|money }}）
     </div>
   </div>
+</section>
 
-  <div class="stat {{ 'danger' if stats.low_balance }}">
-    <span class="stat-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-    </span>
-    <div class="stat-body">
-      <div class="stat-label">余额不足</div>
-      <div class="stat-value">{{ stats.low_balance }}</div>
-      <div class="stat-sub">另有 {{ stats.month_short }} 个余额偏少</div>
+<p class="muted small" style="margin-top:12px">
+  <strong>自动扣费：</strong>每天凌晨 <strong>00:05</strong>（服务器时区）自动跑一次 ——
+  按「每日扣费」或月费分摊的金额从余额里扣一笔并记流水；
+  <strong>余额不够就不扣</strong>，余额原样留着，同时挂一条「待缴费」提醒。
+  想马上跑一次，点右上角「立即巡检」。
+</p>
+
+<section class="chart-row">
+  <div class="panel chart-panel">
+    <div class="panel-head">
+      <h2>每天收入</h2>
+      <div class="seg">
+        {% for d in [7, 14, 30] %}
+        <a href="/?tab={{ tab }}&amp;days={{ d }}" class="{{ 'active' if days == d }}">{{ d }}天</a>
+        {% endfor %}
+      </div>
     </div>
+    {{ bar_svg|safe }}
   </div>
 
-  <div class="stat">
-    <span class="stat-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
-    </span>
-    <div class="stat-body">
-      <div class="stat-label">今日扣款</div>
-      <div class="stat-value">¥{{ stats.daily_total|money }}</div>
-      <div class="stat-sub">已扣 {{ stats.charged_today }} / {{ stats.active }} 个</div>
+  <div class="panel chart-panel">
+    <div class="panel-head">
+      <h2>平台收入比例</h2>
+      <span class="muted">近 {{ dashboard.days }} 天</span>
     </div>
-  </div>
-
-  <div class="stat">
-    <span class="stat-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
-        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
-      </svg>
-    </span>
-    <div class="stat-body">
-      <div class="stat-label">累计充值</div>
-      <div class="stat-value">¥{{ stats.total_recharged|money }}</div>
-      <div class="stat-sub">本月应收 ¥{{ stats.monthly_total|money }}</div>
+    <div class="donut-wrap">
+      {{ donut_svg|safe }}
+      <ul class="legend">
+        {% for p in dashboard.platforms %}
+        <li>
+          <span class="dot" style="background: {{ palette[loop.index0 % palette|length] }}"></span>
+          <span class="lg-name">{{ p.platform }}</span>
+          <span class="lg-amt">¥{{ p.amount|money }}</span>
+          <span class="lg-pct">{{ p.ratio|round(1) }}%</span>
+        </li>
+        {% else %}
+        <li class="muted">还没有收入记录</li>
+        {% endfor %}
+      </ul>
     </div>
   </div>
 </section>
@@ -89,10 +111,11 @@
   <div class="toolbar">
     <form method="get" action="/" class="search-form">
       <input type="text" name="keyword" value="{{ keyword }}"
-             placeholder="搜索手机号 / 宽带账号 / 注册码 / 注册人 / 手机卡使用人">
+             placeholder="搜索手机号 / 宽带账号 / 机房 / 平台 / 节点号 / 注册人 / 安装地址">
       <input type="hidden" name="status" value="{{ status }}">
+      <input type="hidden" name="tab" value="{{ tab }}">
       <button class="btn" type="submit">搜索</button>
-      {% if keyword %}<a class="btn ghost" href="{{ '/?status=' ~ status if status else '/' }}">清空</a>{% endif %}
+      {% if keyword %}<a class="btn ghost" href="/?tab={{ tab }}">清空</a>{% endif %}
     </form>
     <div class="toolbar-right">
       <span class="muted">{{ rows|length }} 条记录</span>
@@ -100,11 +123,11 @@
   </div>
 
   <div class="tabs">
-    <a href="/" class="{{ 'active' if status == '' }}">全部</a>
-    <a href="/?status=remind" class="{{ 'active' if status == 'remind' }}">需催缴</a>
-    <a href="/?status=active" class="{{ 'active' if status == 'active' }}">正常</a>
-    <a href="/?status=suspended" class="{{ 'active' if status == 'suspended' }}">已暂停</a>
-    <a href="/?status=closed" class="{{ 'active' if status == 'closed' }}">已注销</a>
+    <a href="/?tab={{ tab }}" class="{{ 'active' if status == '' }}">全部</a>
+    <a href="/?tab={{ tab }}&amp;status=remind" class="{{ 'active' if status == 'remind' }}">需催缴</a>
+    <a href="/?tab={{ tab }}&amp;status=active" class="{{ 'active' if status == 'active' }}">在用</a>
+    <a href="/?tab={{ tab }}&amp;status=suspended" class="{{ 'active' if status == 'suspended' }}">已暂停</a>
+    <a href="/?tab={{ tab }}&amp;status=closed" class="{{ 'active' if status == 'closed' }}">已注销</a>
   </div>
 
   {% if rows %}
@@ -115,13 +138,19 @@
           <th>操作</th>
           <th>手机号</th>
           <th>宽带账号</th>
-          <th class="num">月费</th>
+          <th>机房</th>
+          <th>节点平台</th>
+          <th>节点号</th>
+          <th class="num">每天收入</th>
+          <th class="num">每日扣费</th>
           <th class="num">余额</th>
           <th class="num">累计充值</th>
-          <th>宽带注册码</th>
+          <th>分组</th>
           <th>注册人</th>
           <th>手机卡使用人</th>
           <th>注册时间</th>
+          {% if tab == 'abnormal' %}<th>异常原因</th>{% endif %}
+          <th>安装地址</th>
         </tr>
       </thead>
       <tbody>
@@ -132,34 +161,109 @@
             <a href="/accounts/{{ row.account.id }}/edit">编辑</a>
             <button type="button" class="btn tiny charge-btn"
                     onclick="rechargeAccount({{ row.account.id }}, '{{ row.account.phone }}', {{ row.flags.balance }}, {{ row.account.total_recharged }}, {{ row.flags.daily }})">充值</button>
+            {% if tab == 'normal' %}
+            <button type="button" class="btn tiny danger-btn"
+                    onclick="markAbnormal({{ row.account.id }}, '{{ row.account.phone }}')">标异常</button>
+            {% else %}
+            <button type="button" class="btn tiny ok-btn"
+                    onclick="restoreAccount({{ row.account.id }}, '{{ row.account.phone }}')">恢复</button>
+            {% endif %}
           </td>
-          <td class="strong"><a href="/accounts/{{ row.account.id }}">{{ row.account.phone }}</a></td>
-          <td class="mono">{{ row.account.broadband_account or '—' }}</td>
-          <td class="num">
-            {% if row.flags.discount %}<span class="tag discount">7折</span>{% endif %}
-            ¥{{ row.flags.fee|money }}
+          <td class="strong">
+            <a href="/accounts/{{ row.account.id }}">{{ row.account.phone }}</a>
+            <button type="button" class="copy-btn" title="复制手机号"
+                    onclick="copyText('{{ row.account.phone }}', this)"
+                    aria-label="复制手机号">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="12" height="12" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
           </td>
-          <td class="num {{ 'neg' if row.flags.low_balance }}">¥{{ row.flags.balance|money }}</td>
+          <td class="mono">
+            {% if row.account.broadband_account %}
+              {{ row.account.broadband_account }}
+              <button type="button" class="copy-btn" title="复制宽带账号"
+                      onclick="copyText('{{ row.account.broadband_account }}', this)"
+                      aria-label="复制宽带账号">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="12" height="12" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ row.account.room or '—' }}</td>
+          <td>{{ row.account.platform or '—' }}</td>
+          <td class="mono">
+            {% if row.account.node_account %}
+              {{ row.account.node_account }}
+              <button type="button" class="copy-btn" title="复制节点号"
+                      onclick="copyText('{{ row.account.node_account }}', this)"
+                      aria-label="复制节点号">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="12" height="12" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="num income">¥{{ row.income|money }}</td>
+          <td class="num" title="{{ '按填写的每日扣费（固定值）' if row.account.daily_cost and row.account.daily_cost > 0 else '按月费 ÷ 当月天数自动算' }}">¥{{ row.flags.daily|money }}</td>
+          <td class="num {{ 'neg' if row.flags.low_balance }}">
+            ¥{{ row.flags.balance|money }}
+            {% if row.flags.daily and row.flags.daily > 0 %}
+            <div class="muted small">约可用 {{ (row.flags.balance / row.flags.daily)|round(0, 'floor')|int }} 天</div>
+            {% endif %}
+          </td>
           <td class="num">¥{{ row.account.total_recharged|money }}</td>
-          <td class="mono">{{ row.account.registration_code or '—' }}</td>
+          <td>{% if row.group %}<span class="tag">{{ row.group.name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
           <td>{{ row.account.registrant or '—' }}</td>
           <td>{{ row.account.sim_user or '—' }}</td>
           <td class="muted">{{ row.account.registered_at|datetime or '—' }}</td>
+          {% if tab == 'abnormal' %}
+          <td>
+            {% if row.account.abnormal_reason %}
+            <span class="tag danger">{{ ABNORMAL_REASONS.get(row.account.abnormal_reason, row.account.abnormal_reason) }}</span>
+            {% if row.account.abnormal_note %}<div class="muted small">{{ row.account.abnormal_note }}</div>{% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          {% endif %}
+          <td>{{ row.account.install_address or '—' }}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-    <div class="empty">
-      <span class="empty-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+  <div class="empty">
+    <span class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
              stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 15h8"/>
-        </svg>
-      </span>
-      {% if keyword or status %}没有符合条件的记录。{% else %}还没有记录，点右上角「新增账号」开始记账。{% endif %}
-    </div>
+        <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 15h8"/>
+      </svg>
+    </span>
+    {% if keyword or status %}
+      没有符合条件的记录。
+    {% elif tab == 'abnormal' %}
+      目前没有异常账号，正常页面里的账号点「标异常」就会移到这里。
+    {% else %}
+      还没有记录，点右上角「新增账号」开始记账。
+    {% endif %}
+  </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 标记异常 / 恢复正常 的弹窗在 base.html 里定义好了，这里直接用。
+</script>
 {% endblock %}

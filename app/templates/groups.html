@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}分组{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>分组</h1>
+    <p class="page-sub">
+      分组是标签，用来把正常账号归堆。每个组可以记安装地点和管理线信息
+      （注册手机号 / 宽带账号 / 到期时间）。
+    </p>
+  </div>
+  <div class="head-ops">
+    <button class="btn primary" type="button" onclick="openGroupForm()">新建分组</button>
+  </div>
+</div>
+
+{% if rows %}
+<div class="group-grid">
+  {% for row in rows %}
+  <section class="panel group-card">
+    <div class="group-head">
+      <div>
+        <h2>{{ row.group.name }}</h2>
+        <p class="muted">{{ row.count }} 条宽带</p>
+      </div>
+      <div class="ops">
+        <button class="btn tiny" type="button"
+                onclick='openGroupForm({{ row.group.id }}, {{ row.group.name|tojson }}, {{ row.group.install_location|tojson }}, {{ row.group.manage_phone|tojson }}, {{ row.group.manage_account|tojson }}, {{ (row.group.manage_expire_at|string)[:10]|tojson }}, {{ row.group.note|tojson }})'>编辑</button>
+        <form method="post" action="/groups/{{ row.group.id }}/delete"
+              onsubmit="return confirm('删除分组「{{ row.group.name }}」？组里的账号会退回「未分组」，不会被删掉。');">
+          <button class="btn tiny danger-btn" type="submit">删除</button>
+        </form>
+      </div>
+    </div>
+
+    <dl class="group-meta">
+      <div><dt>安装地点</dt><dd>{{ row.group.install_location or '—' }}</dd></div>
+      <div>
+        <dt>管理线注册手机号</dt>
+        <dd class="mono">
+          {% if row.group.manage_phone %}
+            {{ row.group.manage_phone }}
+            <button type="button" class="copy-btn" title="复制管理线手机号"
+                    onclick="copyText('{{ row.group.manage_phone }}', this)"
+                    aria-label="复制管理线手机号">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="12" height="12" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          {% else %}—{% endif %}
+        </dd>
+      </div>
+      <div>
+        <dt>管理线宽带账号</dt>
+        <dd class="mono">
+          {% if row.group.manage_account %}
+            {{ row.group.manage_account }}
+            <button type="button" class="copy-btn" title="复制管理线宽带账号"
+                    onclick="copyText('{{ row.group.manage_account }}', this)"
+                    aria-label="复制管理线宽带账号">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="12" height="12" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+            </button>
+          {% else %}—{% endif %}
+        </dd>
+      </div>
+      <div><dt>管理线到期时间</dt><dd>{{ row.group.manage_expire_at|datetime or '—' }}</dd></div>
+    </dl>
+
+    {% if row.group.note %}<p class="muted small">{{ row.group.note }}</p>{% endif %}
+
+    <div class="group-accounts">
+      {% for account in row.accounts %}
+      <a href="/accounts/{{ account.id }}" class="chip">{{ account.phone }}</a>
+      {% else %}
+      <span class="muted small">这个组还没有账号</span>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<section class="panel">
+  <div class="empty">
+    <span class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7h18M3 12h18M3 17h10"/>
+      </svg>
+    </span>
+    还没有分组。点右上角「新建分组」，把同一条管理线下的账号归到一起。
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.openGroupForm = async function (id, name, location, phone, account, expire, note) {
+    const editing = !!id;
+    const result = await showModal({
+      title: editing ? '编辑分组' : '新建分组',
+      okText: editing ? '保存' : '创建',
+      body: `
+        <div class="modal-field">
+          <label>分组名称</label>
+          <input id="gName" type="text" value="${name || ''}" placeholder="例如 机房A / 羊山线">
+        </div>
+        <div class="modal-field">
+          <label>安装地点</label>
+          <input id="gLocation" type="text" value="${location || ''}" placeholder="例如 罗山县二里湾小区">
+        </div>
+        <div class="modal-field">
+          <label>管理线注册手机号</label>
+          <input id="gPhone" type="text" value="${phone || ''}" placeholder="11 位手机号">
+        </div>
+        <div class="modal-field">
+          <label>管理线宽带账号</label>
+          <input id="gAccount" type="text" value="${account || ''}" placeholder="管理线的宽带账号">
+        </div>
+        <div class="modal-field">
+          <label>管理线到期时间</label>
+          <input id="gExpire" type="date" value="${expire || ''}">
+        </div>
+        <div class="modal-field">
+          <label>备注（可留空）</label>
+          <input id="gNote" type="text" value="${note || ''}">
+        </div>`,
+      onOk: () => {
+        const gName = document.getElementById('gName').value.trim();
+        if (!gName) { showFieldError('给分组起个名字'); return false; }
+        return {
+          id: id || '',
+          name: gName,
+          install_location: document.getElementById('gLocation').value.trim(),
+          manage_phone: document.getElementById('gPhone').value.trim(),
+          manage_account: document.getElementById('gAccount').value.trim(),
+          manage_expire_at: document.getElementById('gExpire').value,
+          note: document.getElementById('gNote').value.trim(),
+        };
+      },
+    });
+    if (!result) return;
+
+    const fd = new FormData();
+    fd.append('name', result.name);
+    fd.append('install_location', result.install_location);
+    fd.append('manage_phone', result.manage_phone);
+    fd.append('manage_account', result.manage_account);
+    fd.append('manage_expire_at', result.manage_expire_at);
+    fd.append('note', result.note);
+    const url = result.id ? '/groups/' + result.id + '/edit' : '/groups';
+    const res = await fetch(url, { method: 'POST', body: fd, redirect: 'follow' });
+    if (res.ok || res.redirected) location.reload();
+    else alert('保存失败');
+  };
+</script>
+{% endblock %}

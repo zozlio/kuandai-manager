@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}数据导出{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>数据导出</h1>
+    <p class="page-sub">
+      CSV 用 Excel / WPS 直接打开，全量备份 JSON 可以把整个系统还原回去
+    </p>
+  </div>
+  <div class="head-ops">
+    <a class="btn" href="/">返回台账</a>
+  </div>
+</div>
+
+<div class="alert">
+  导出的文件里含有手机号、宽带账号、安装地址这些信息，<strong>属于敏感资料</strong>，
+  存到本地或发给别人前请自己把关。全量备份里还包含登录密码的哈希，也请当敏感文件保管。
+</div>
+
+<section class="panel">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <strong>可下载的文件</strong>
+    </div>
+    <div class="toolbar-right">
+      <span class="muted">文件名带当天日期</span>
+    </div>
+  </div>
+
+  <div class="export-grid">
+    {% for f in files %}
+    <a class="export-card {{ 'danger' if f.danger }}" href="{{ f.url }}" download>
+      <div class="export-name">{{ f.name }}</div>
+      <div class="export-desc">{{ f.desc }}</div>
+      <div class="export-meta">
+        {% if f.size is not none %}<span>{{ f.size }} {{ f.unit }}</span>{% endif %}
+        <span class="export-dl">下载 ↓</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="toolbar">
+    <div class="toolbar-left"><strong>怎么恢复</strong></div>
+  </div>
+  <div class="panel-body">
+    <p class="muted">
+      全量备份 JSON 就是一个完整的数据库快照。要还原的时候，在服务器上执行：
+    </p>
+    <pre class="code-block">python3 scripts/restore_backup.py 备份文件.json --yes</pre>
+    <p class="muted small">
+      脚本会先把当前数据库改名备份，再写入备份里的数据，出问题还能退回原来的库。
+    </p>
+  </div>
+</section>
+
+{% endblock %}

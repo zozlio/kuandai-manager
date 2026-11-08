@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}AI 识图{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>AI 识图</h1>
+    <p class="page-sub">
+      上传机房收益的截图，AI 先按<b>宽带账号</b>认，再核对<b>节点号</b>，
+      把每天的收益金额填进台账。识别结果要你确认过才写库。
+    </p>
+  </div>
+  <div class="head-ops">
+    <a class="btn ghost" href="/settings">视觉模型设置</a>
+  </div>
+</div>
+
+{% if not vision_status.configured %}
+<div class="alert error">
+  视觉模型还没配置。到<a href="/settings">设置页</a>填上视觉模型名和密钥（没填密钥就沿用 AI 那一项）就能用了。
+</div>
+{% endif %}
+
+<section class="panel upload-panel">
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="imageInput" accept="image/*" hidden>
+    <span class="upload-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <path d="m21 15-5-5L5 21"/>
+      </svg>
+    </span>
+    <strong>把截图拖进来，或点这里选文件</strong>
+    <small class="muted">支持 PNG / JPG / WEBP，最大 12MB</small>
+  </div>
+  <div class="upload-preview" id="preview" hidden>
+    <img id="previewImg" alt="待识别的截图">
+    <div class="upload-meta">
+      <span id="previewName"></span>
+      <button class="btn" type="button" id="clearFile">换一张</button>
+    </div>
+  </div>
+  <div class="upload-ops">
+    <button class="btn primary" type="button" id="recognizeBtn" disabled>开始识别</button>
+    <span class="muted" id="recognizeStatus"></span>
+  </div>
+</section>
+
+<section class="panel" id="resultPanel" hidden>
+  <div class="panel-head">
+    <h2>识别结果（确认后才会写进台账）</h2>
+    <div class="toolbar-right">
+      <span class="muted" id="resultCount"></span>
+      <button class="btn primary" type="button" id="applyBtn">确认回填</button>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>采用</th>
+          <th>宽带账号</th>
+          <th>匹配到的宽带</th>
+          <th>节点号</th>
+          <th>核对结果</th>
+          <th class="num">每天收入</th>
+          <th>日期</th>
+          <th>原文</th>
+        </tr>
+      </thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+  </div>
+  <p class="muted small">
+    匹配不上的行（红色）需要你手动选一下宽带账号；节点号对不上也没关系，
+    确认回填时会顺手把节点号更新到这条宽带上。
+  </p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('imageInput');
+  const preview = document.getElementById('preview');
+  const previewImg = document.getElementById('previewImg');
+  const previewName = document.getElementById('previewName');
+  const recognizeBtn = document.getElementById('recognizeBtn');
+  const statusEl = document.getElementById('recognizeStatus');
+  const resultPanel = document.getElementById('resultPanel');
+  const resultBody = document.getElementById('resultBody');
+  const resultCount = document.getElementById('resultCount');
+  const applyBtn = document.getElementById('applyBtn');
+
+  let pickedFile = null;
+  let rows = [];
+
+  function setFile(file) {
+    if (!file) return;
+    pickedFile = file;
+    previewImg.src = URL.createObjectURL(file);
+    previewName.textContent = file.name + '（' + Math.round(file.size / 1024) + 'KB）';
+    preview.hidden = false;
+    dropZone.hidden = true;
+    recognizeBtn.disabled = false;
+    statusEl.textContent = '';
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  document.getElementById('clearFile').addEventListener('click', () => {
+    pickedFile = null;
+    fileInput.value = '';
+    preview.hidden = true;
+    dropZone.hidden = false;
+    recognizeBtn.disabled = true;
+    resultPanel.hidden = true;
+  });
+
+  fileInput.addEventListener('change', (e) => setFile(e.target.files[0]));
+
+  ['dragenter', 'dragover'].forEach(evt =>
+    dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add('dragging'); }));
+  ['dragleave', 'drop'].forEach(evt =>
+    dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.remove('dragging'); }));
+  dropZone.addEventListener('drop', (e) => setFile(e.dataTransfer.files[0]));
+
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderRows(items) {
+    rows = items.map((item, i) => Object.assign({}, item, { use: item.status === 'matched' }));
+    resultBody.innerHTML = rows.map((row, i) => {
+      const bad = row.status !== 'matched';
+      return `
+        <tr class="${bad ? 'row-bad' : ''}">
+          <td><input type="checkbox" data-idx="${i}" ${row.use ? 'checked' : ''}></td>
+          <td class="mono">${escapeHtml(row.broadband) || '—'}</td>
+          <td>
+            ${row.account_id
+              ? `<span class="tag ok">${escapeHtml(row.account_phone)}</span>
+                 <div class="muted small">${escapeHtml(row.account_reason)}</div>`
+              : `<span class="tag danger">没匹配上</span>`}
+          </td>
+          <td class="mono">${escapeHtml(row.node_account || row.node) || '—'}</td>
+          <td>
+            ${row.node_reason
+              ? `<span class="tag ${row.node_reason === '节点号不一致' ? 'danger' : 'ok'}">${escapeHtml(row.node_reason)}</span>
+                 ${row.saved_node_account
+                   ? `<div class="muted small">台账登记：${escapeHtml(row.saved_node_account)}</div>`
+                   : ''}`
+              : '<span class="muted">—</span>'}
+          </td>
+          <td class="num"><input class="cell-input" type="number" step="0.01"
+                 data-idx="${i}" data-field="amount" value="${row.amount}"></td>
+          <td><input class="cell-input" type="date" data-idx="${i}" data-field="day"
+                 value="${row.day}"></td>
+          <td class="muted small">${escapeHtml(row.raw)}</td>
+        </tr>`;
+    }).join('');
+
+    resultCount.textContent = rows.length + ' 行，勾选 ' +
+      rows.filter(r => r.use).length + ' 行';
+    resultPanel.hidden = false;
+
+    resultBody.querySelectorAll('input[data-idx]').forEach((el) => {
+      el.addEventListener('change', () => {
+        const i = Number(el.dataset.idx);
+        if (el.type === 'checkbox') rows[i].use = el.checked;
+        else rows[i][el.dataset.field] = el.value;
+        resultCount.textContent = rows.length + ' 行，勾选 ' +
+          rows.filter(r => r.use).length + ' 行';
+      });
+    });
+  }
+
+  recognizeBtn.addEventListener('click', async () => {
+    if (!pickedFile) return;
+    recognizeBtn.disabled = true;
+    statusEl.textContent = '正在识别，请稍等…';
+
+    const fd = new FormData();
+    fd.append('image', pickedFile);
+    try {
+      const res = await fetch('/api/recognize', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        statusEl.textContent = '';
+        alert(data.error || '识别失败');
+        recognizeBtn.disabled = false;
+        return;
+      }
+      if (!data.items || !data.items.length) {
+        statusEl.textContent = '没认出内容，换个清楚点的截图试试';
+        recognizeBtn.disabled = false;
+        return;
+      }
+      statusEl.textContent = '识别完成';
+      recognizeBtn.disabled = false;
+      renderRows(data.items);
+    } catch (err) {
+      statusEl.textContent = '';
+      alert('识别失败：' + err);
+      recognizeBtn.disabled = false;
+    }
+  });
+
+  applyBtn.addEventListener('click', async () => {
+    const used = rows.filter(r => r.use);
+    if (!used.length) { alert('先勾几行再回填'); return; }
+    const payload = used.map(r => ({
+      use: r.use,
+      node_account: r.node_account || r.node,
+      account_id: r.account_id,
+      node: r.node,
+      platform: r.platform,
+      amount: r.amount,
+      day: r.day,
+    }));
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify(payload));
+    const res = await fetch('/api/recognize/apply', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '回填失败'); return; }
+    await showModal({
+      title: '回填完成',
+      okText: '知道了', hideCancel: true,
+      body: `<p class="modal-text">已经写入 ${data.saved} 条收入`
+        + (data.updated_nodes ? `，更新了 ${data.updated_nodes} 个节点号` : '') + '。</p>',
+    });
+    location.reload();
+  });
+</script>
+{% endblock %}

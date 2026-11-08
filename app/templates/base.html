@@ -32,6 +32,28 @@
         </svg>
         <span>台账</span>
       </a>
+      <a href="/rooms" class="{{ 'active' if request.url.path.startswith('/rooms') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/>
+          <path d="M6 7h.01M6 17h.01"/>
+        </svg>
+        <span>机房</span>
+      </a>
+      <a href="/groups" class="{{ 'active' if request.url.path.startswith('/groups') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7h18M3 12h18M3 17h10"/>
+        </svg>
+        <span>分组</span>
+      </a>
+      <a href="/recognize" class="{{ 'active' if request.url.path.startswith('/recognize') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 3h18v18H3z"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+        </svg>
+        <span>识图</span>
+      </a>
       <a href="/reminders" class="{{ 'active' if request.url.path.startswith('/reminders') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -48,6 +70,13 @@
           <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
         </svg>
         <span>AI 助手</span>
+      </a>
+      <a href="/export" class="{{ 'active' if request.url.path.startswith('/export') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+        </svg>
+        <span>导出</span>
       </a>
       <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -111,6 +140,48 @@
   const cancelBtn = document.getElementById('modalCancel');
   const closeBtn = document.getElementById('modalX');
   let resolver = null;
+
+  window.ABNORMAL_REASONS = {{ ABNORMAL_REASONS|tojson }};
+
+  /**
+   * 一键复制。优先用剪贴板 API，老浏览器退回 execCommand。
+   * 复制成功按钮上会短暂变成「已复制」，2 秒后还原。
+   */
+  window.copyText = async function (text, btn) {
+    if (!text) return;
+    const value = String(text);
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    } catch (e) {
+      ok = false;
+    }
+    if (btn) {
+      const old = btn.getAttribute('title') || '';
+      btn.classList.add(ok ? 'copied' : 'copy-failed');
+      btn.setAttribute('title', ok ? '已复制' : '复制失败，请手动选中');
+      setTimeout(() => {
+        btn.classList.remove('copied', 'copy-failed');
+        btn.setAttribute('title', old);
+      }, 2000);
+    }
+    if (!ok) {
+      window.prompt('复制失败，请手动复制：', value);
+    }
+  };
 
   function hide() {
     backdrop.hidden = true;
@@ -254,6 +325,58 @@
     const res = await fetch('/accounts/' + id + '/delete', { method: 'POST' });
     if (res.ok || res.redirected) location.href = '/';
     else alert('删除失败');
+  };
+
+  /** 标记异常：六选一的原因 */
+  window.markAbnormal = async function (id, phone) {
+    const reasons = window.ABNORMAL_REASONS || {};
+    const options = Object.entries(reasons).map(([key, label], i) => `
+      <label class="radio-row">
+        <input type="radio" name="abnReason" value="${key}" ${i === 0 ? 'checked' : ''}>
+        <span>${label}</span>
+      </label>`).join('');
+
+    const result = await showModal({
+      title: '标记异常：' + phone,
+      okText: '标记为异常',
+      okClass: 'danger',
+      body: `
+        <p class="modal-text">选一条异常原因，标记后这条线会移到「异常账号」页。</p>
+        <div class="radio-list">${options}</div>
+        <div class="modal-field">
+          <label>补充说明（可留空）</label>
+          <input id="abnNote" type="text" placeholder="例如：机房断电两小时">
+        </div>`,
+      onOk: () => {
+        const picked = document.querySelector('#modalBody input[name="abnReason"]:checked');
+        if (!picked) { showFieldError('请选一个异常原因'); return false; }
+        const note = document.getElementById('abnNote');
+        return { reason: picked.value, note: note ? note.value : '' };
+      },
+    });
+    if (!result) return;
+
+    const fd = new FormData();
+    fd.append('reason', result.reason);
+    fd.append('note', result.note);
+    const res = await fetch('/accounts/' + id + '/abnormal', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '标记失败'); return; }
+    location.reload();
+  };
+
+  /** 恢复正常 */
+  window.restoreAccount = async function (id, phone) {
+    const ok = await showModal({
+      title: '恢复正常',
+      okText: '确认恢复',
+      body: `<p class="modal-text">确定把 ${phone} 移回「正常账号」？异常原因会被清掉。</p>`,
+    });
+    if (!ok) return;
+    const res = await fetch('/accounts/' + id + '/restore', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '恢复失败'); return; }
+    location.reload();
   };
 
   /** 表单提交前的确认窗口 */
