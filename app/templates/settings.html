@@ -23,10 +23,7 @@
   <div class="page-head" style="margin-bottom:4px">
     <div>
       <h2 style="font-size:18px">AI 接口接入</h2>
-      <p class="page-sub">
-        任何 OpenAI 兼容协议的服务都能用：DeepSeek、通义千问、MiniMax、OpenAI、本地 Ollama 等。
-        三个都填上才会启用 AI 功能。
-      </p>
+      <p class="page-sub">任何 OpenAI 兼容协议的服务都能用：DeepSeek、通义千问、MiniMax、OpenAI、本地 Ollama 等。三个都填上才会启用 AI 功能。</p>
     </div>
     <div>
       <span class="badge {{ 'ok' if ai_config.configured else 'danger' }}">
@@ -36,161 +33,71 @@
   </div>
 
   <form method="post" action="/settings/ai"
-        data-confirm
-        data-title="确认保存 AI 配置"
+        data-confirm data-title="确认保存 AI 配置"
         data-msg="确认保存？保存后 AI 功能立即按新配置生效。">
     <div class="grid">
       <label class="full">接口地址
-        <input name="ai_base_url" value="{{ ai_config.ai_base_url }}"
-               placeholder="例如 https://api.deepseek.com/v1">
-        <small class="field-hint">
-          填到域名即可，系统会自动补 /v1。当前来源：{{ '页面设置' if ai_config.ai_base_url_source == 'page' else '环境变量' }}
-        </small>
+        <input name="ai_base_url" value="{{ ai_config.ai_base_url }}" placeholder="例如 https://api.deepseek.com/v1">
+        <small class="field-hint">填到域名即可，系统会自动补 /v1。当前来源：{{ '页面设置' if ai_config.ai_base_url_source == 'page' else '环境变量' }}</small>
       </label>
-
       <label class="full">密钥
-        <input name="ai_api_key" type="password" value=""
-               placeholder="{{ masked_key or '例如 sk-...' }}" autocomplete="off">
-        <small class="field-hint">
-          {% if masked_key %}
-            已保存的密钥：{{ masked_key }}（留空表示不改这一项）
-          {% else %}
-            当前来源：{{ '页面设置' if ai_config.ai_api_key_source == 'page' else ('环境变量' if ai_config.ai_api_key_source == 'env' else '未配置') }}
-          {% endif %}
-        </small>
+        <input name="ai_api_key" type="password" value="" placeholder="{{ masked_key or '例如 sk-...' }}" autocomplete="off">
+        <small class="field-hint">{% if masked_key %}已保存的密钥：{{ masked_key }}（留空表示不改这一项）{% else %}当前来源：{{ '页面设置' if ai_config.ai_api_key_source == 'page' else ('环境变量' if ai_config.ai_api_key_source == 'env' else '未配置') }}{% endif %}</small>
       </label>
-
       <label class="full">模型名
-        <input name="ai_model" value="{{ ai_config.ai_model }}"
-               placeholder="例如 deepseek-chat">
-        <small class="field-hint">
-          当前来源：{{ '页面设置' if ai_config.ai_model_source == 'page' else '环境变量' }}
-        </small>
+        <input name="ai_model" value="{{ ai_config.ai_model }}" placeholder="例如 deepseek-chat">
+        <small class="field-hint">当前来源：{{ '页面设置' if ai_config.ai_model_source == 'page' else '环境变量' }}</small>
+      </label>
+      <label class="full">单次生成上限（token）
+        <input name="ai_max_tokens" type="number" min="256" max="128000" step="256" value="{{ ai_config.ai_max_tokens or '8192' }}">
+        <small class="field-hint">AI 一次最多生成多少 token。思考型模型不限制的话，思考阶段可能把请求拖到超时。默认 8192。</small>
       </label>
     </div>
-
     <div class="form-actions">
       <button class="btn primary" type="submit">保存配置</button>
-      <button class="btn" type="submit" formaction="/settings/ai/test" formnovalidate
-              data-confirm="off" data-ok="开始测试">测试连接</button>
-      {% if ai_config.has_override %}
-      <button class="btn danger" type="submit" formaction="/settings/ai/reset"
-              formnovalidate data-confirm
-              data-title="确认清除页面配置"
-              data-msg="清除后 AI 配置回落到容器的环境变量，确定吗？"
-              data-danger="1">
-        恢复环境变量
-      </button>
-      {% endif %}
+      <button class="btn" type="submit" formaction="/settings/ai/test" formnovalidate data-confirm="off" data-ok="开始测试">测试连接</button>
     </div>
   </form>
 
-  <h2 class="mt">常见服务商怎么填</h2>
-  <div class="table-scroll">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>服务商</th>
-          <th>接口地址</th>
-          <th>模型名示例</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>DeepSeek</td>
-          <td class="mono">https://api.deepseek.com/v1</td>
-          <td class="mono">deepseek-chat</td>
-        </tr>
-        <tr>
-          <td>通义千问（DashScope 兼容模式）</td>
-          <td class="mono">https://dashscope.aliyuncs.com/compatible-mode/v1</td>
-          <td class="mono">qwen-plus</td>
-        </tr>
-        <tr>
-          <td>MiniMax 中国版（默认）</td>
-          <td class="mono">https://api.minimaxi.com/v1</td>
-          <td class="mono">MiniMax-M3</td>
-        </tr>
-        <tr>
-          <td>MiniMax 国际版</td>
-          <td class="mono">https://api.minimax.io/v1</td>
-          <td class="mono">以控制台可用模型为准</td>
-        </tr>
-        <tr>
-          <td>OpenAI</td>
-          <td class="mono">https://api.openai.com/v1</td>
-          <td class="mono">gpt-4o-mini</td>
-        </tr>
-        <tr>
-          <td>本地 Ollama</td>
-          <td class="mono">http://host.docker.internal:11434/v1</td>
-          <td class="mono">你的本地模型名</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
   <h2 class="mt">视觉模型（识图）</h2>
-  <p class="page-sub">
-    用来在「识图」页把截图里的机房收益读出来。接口地址和密钥留空就沿用上面 AI 那份，
-    模型名默认用 <code>MiniMax-M3-VL-01</code>。
-  </p>
+  <p class="page-sub">用来在「识图」页把截图里的节点收益读出来。接口地址、密钥、模型名留空就沿用上面 AI 那份。模型必须支持图片输入，纯文本模型认不了图。</p>
 
   <form method="post" action="/settings/vision"
-        data-confirm
-        data-title="确认保存视觉模型配置"
+        data-confirm data-title="确认保存视觉模型配置"
         data-msg="确认保存？保存后「识图」页立即按新配置生效。">
     <div class="grid">
       <label class="full">视觉接口地址
-        <input name="vision_base_url" value="{{ vision_config.vision_base_url }}"
-               placeholder="例如 https://api.minimaxi.com/v1">
-        <small class="field-hint">
-          留空则沿用上面的 AI 接口地址。当前来源：{{ '页面设置' if vision_config.vision_base_url_source == 'page' else ('沿用 AI 配置' if vision_config.vision_base_url else '未配置') }}
-        </small>
+        <input name="vision_base_url" value="{{ vision_config.vision_base_url }}" placeholder="例如 https://api.deepseek.com/v1">
+        <small class="field-hint">留空则沿用上面的 AI 接口地址。</small>
       </label>
-
       <label class="full">视觉密钥
-        <input name="vision_api_key" type="password" value=""
-               placeholder="{{ vision_masked_key or '留空则沿用上面的 AI 密钥' }}" autocomplete="off">
-        <small class="field-hint">
-          {% if vision_masked_key %}
-            已保存：{{ vision_masked_key }}（留空表示不改这一项）
-          {% else %}
-            留空表示沿用上面 AI 的密钥
-          {% endif %}
-        </small>
+        <input name="vision_api_key" type="password" value="" placeholder="{{ vision_masked_key or '留空则沿用上面的 AI 密钥' }}" autocomplete="off">
+        <small class="field-hint">{% if vision_masked_key %}已保存：{{ vision_masked_key }}（留空表示不改这一项）{% else %}留空表示沿用上面 AI 的密钥{% endif %}</small>
       </label>
-
       <label class="full">视觉模型名
-        <input name="vision_model" value="{{ vision_config.vision_model }}"
-               placeholder="MiniMax-M3-VL-01">
+        <input name="vision_model" value="{{ vision_config.vision_model }}" placeholder="留空沿用上面的 AI 模型">
         <small class="field-hint">必须是支持图片输入的模型，纯文本模型认不了图</small>
       </label>
-
       <label class="full">接口格式
         <select name="vision_format">
           {% for key, label in VISION_FORMAT_LABELS.items() %}
           <option value="{{ key }}" {{ 'selected' if vision_config.vision_format == key }}>{{ label }}</option>
           {% endfor %}
         </select>
-        <small class="field-hint">
-          MiniMax 用前两种；其他 OpenAI 兼容服务选第三种。识别报错就换一种试试。
-        </small>
+        <small class="field-hint">通用 OpenAI 兼容服务选第一种；MiniMax 选后两种。</small>
+      </label>
+      <label class="full">视觉超时（秒）
+        <input name="vision_timeout" type="number" min="30" max="1800" step="10" value="{{ vision_config.vision_timeout or '300' }}">
+        <small class="field-hint">一次识图最多等多久。免费/慢速端点识别一张图可能 1 分钟以上，常报超时就调大。</small>
       </label>
     </div>
-
     <div class="form-actions">
       <button class="btn primary" type="submit">保存视觉配置</button>
-      <button class="btn" type="submit" formaction="/settings/vision/test" formnovalidate
-              data-confirm="off" data-ok="开始测试">测试连接</button>
+      <button class="btn" type="submit" formaction="/settings/vision/test" formnovalidate data-confirm="off" data-ok="开始测试">测试连接</button>
     </div>
   </form>
 
   <h2 class="mt">数据与备份</h2>
-  <p class="muted">
-    台账数据、流水、提醒和这里填的 AI 配置，都存在容器的 <code>/data</code> 目录里
-    （一个 SQLite 文件）。建议把宿主机目录挂载出来，备份时直接复制那个文件即可。
-  </p>
+  <p class="muted">台账数据、流水、提醒和这里填的 AI 配置，都存在容器的 <code>/data</code> 目录里（一个 SQLite 文件）。建议把宿主机目录挂载出来，备份时直接复制那个文件即可。</p>
 </section>
-
 {% endblock %}
