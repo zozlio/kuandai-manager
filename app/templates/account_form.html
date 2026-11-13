@@ -18,25 +18,21 @@
 <section class="panel form-panel">
   <form method="post"
         action="{{ ('/accounts/' ~ account.id ~ '/edit') if account else '/accounts/new' }}"
-        data-confirm
-        data-title="确认保存修改"
-        data-msg="确认保存这个账号的修改内容？">
+        data-confirm data-title="确认保存修改" data-msg="确认保存这个账号的修改内容？">
+    {% if error %}
+    <div class="form-error alert alert-danger">{{ error }}</div>
+    {% endif %}
     <div class="grid">
       <label>电话号码 <span class="req">*</span>
-        <input name="phone" required value="{{ account.phone if account else '' }}"
-               placeholder="例如 13800138000">
+        <input name="phone" required value="{{ account.phone if account else '' }}" placeholder="例如 13800138000">
       </label>
       <label>宽带账号
         <input name="broadband_account" id="bbInput"
                value="{{ account.broadband_account if account else '' }}"
-               {{ 'readonly' if account else '' }}
-               placeholder="开通时给的那个账号">
+               placeholder="开通时给的那个账号" required>
         <small class="field-hint">
-          {% if account %}
-            <strong>宽带账号是身份标识，建好后不能改</strong>（要改得重新开一条记录）
-          {% else %}
-            建好之后这个字段就锁定了，不能再改
-          {% endif %}
+          {% if account %}<strong>宽带账号可修改，但需唯一</strong>（不能和别的账号重复）
+          {% else %}建好后仍可修改，但不能和别的账号重复{% endif %}
         </small>
       </label>
       <label>宽带注册码
@@ -46,12 +42,10 @@
         <input name="registrant" value="{{ account.registrant if account else '' }}">
       </label>
       <label>手机卡使用人
-        <input name="sim_user" value="{{ account.sim_user if account else '' }}"
-               placeholder="这张手机卡是谁在用">
+        <input name="sim_user" value="{{ account.sim_user if account else '' }}" placeholder="这张手机卡是谁在用">
       </label>
       <label>注册时间
-        <input type="datetime-local" name="registered_at"
-               value="{{ account.registered_at.strftime('%Y-%m-%dT%H:%M') if account and account.registered_at else '' }}">
+        <input type="datetime-local" name="registered_at" value="{{ account.registered_at.strftime('%Y-%m-%dT%H:%M') if account and account.registered_at else '' }}">
       </label>
       <label>运营商
         <select name="provider">
@@ -64,56 +58,27 @@
           {% endif %}
         </select>
       </label>
-      <label>安装地址
-        <input name="install_address" value="{{ account.install_address if account else '' }}"
-               placeholder="宽带实际装在哪儿">
-        <small class="field-hint">列表里单独一列，放在最后一列</small>
-      </label>
       <label>机房
-        <input name="room" value="{{ account.room if account else '' }}"
-               placeholder="例如 香港机房 / 郑州机房">
-        <small class="field-hint">机房是分组用，机房下面按平台排宽带账号</small>
+        <input name="room" value="{{ account.room if account else '' }}" placeholder="例如 香港机房 / 郑州机房">
+        <small class="field-hint">机房下面按平台排宽带账号</small>
       </label>
       <label>节点平台
-        <input name="platform" value="{{ account.platform if account else '' }}"
-               placeholder="例如 某某云">
+        <input name="platform" value="{{ account.platform if account else '' }}" placeholder="例如 某某云">
       </label>
       <label>节点号
-        <input name="node_account" value="{{ account.node_account if account else '' }}"
-               placeholder="服务器上的账号">
-        <small class="field-hint">
-          一条宽带对应一个节点号。这个和<strong>节点平台</strong>随时可以改，
-          <strong>宽带账号</strong>才是不能改的那个
-        </small>
-      </label>
-      <label>分组
-        <select name="group_id">
-          <option value="0">未分组</option>
-          {% for g in groups %}
-          <option value="{{ g.id }}" {{ 'selected' if account and account.group_id == g.id }}>{{ g.name }}</option>
-          {% endfor %}
-        </select>
-        <small class="field-hint">分组里可以记安装地点和管理线信息</small>
+        <input name="node_account" value="{{ account.node_account if account else '' }}" placeholder="服务器上的账号">
+        <small class="field-hint">一条宽带对应一个节点号。这个和<strong>节点平台</strong>随时可以改，宽带账号也能改（不能和别的账号重复）</small>
       </label>
       <label>套餐原价（元）
-        <input type="number" step="0.01" min="0" name="monthly_fee" id="feeInput"
-               value="{{ account.monthly_fee if account else '399.00' }}">
+        <input type="number" step="0.01" min="0" name="monthly_fee" id="feeInput" value="{{ account.monthly_fee if account else '399.00' }}">
       </label>
       <label>每日扣费（元，留空按月费自动算）
-        <input type="number" step="0.01" min="0" name="daily_cost" id="costInput"
-               value="{{ account.daily_cost if account else '' }}"
-               placeholder="留空 = 按月费 ÷ 当月天数">
-        <small class="field-hint">
-          这一栏<strong>填了就以你填的为准</strong>，七折开关就不管它了；
-          <strong>留空（或填 0）</strong>才会按套餐原价和七折自动算每天扣多少
-        </small>
+        <input type="number" step="0.01" min="0" name="daily_cost" id="costInput" value="{{ account.daily_cost if account else '' }}" placeholder="留空 = 按月费 ÷ 当月天数">
+        <small class="field-hint">这一栏<strong>填了就以你填的为准</strong>，七折开关就不管它了；<strong>留空（或填 0）</strong>才会按套餐原价和七折自动算每天扣多少</small>
       </label>
       <label>{{ '当前余额（元）' if account else '开号金额（元）' }}
-        <input type="number" step="0.01" min="0" name="balance"
-               value="{{ account.balance if account else '500.00' }}">
-        <small class="field-hint">
-          {% if account %}余额改动会记一笔调整流水{% else %}开号金额会计入「累计充值」{% endif %}
-        </small>
+        <input type="number" step="0.01" min="0" name="balance" value="{{ account.balance if account else '500.00' }}">
+        <small class="field-hint">{% if account %}余额改动会记一笔调整流水{% else %}开号金额会计入「累计充值」{% endif %}</small>
       </label>
       <label>状态
         <select name="status">
@@ -125,34 +90,24 @@
     </div>
 
     <label class="switch-field {{ 'locked' if account and account.discount_enabled }}">
-      <input type="checkbox" name="discount_enabled" value="1" id="discountToggle"
-             {{ 'checked' if account and account.discount_enabled }}
-             {{ 'disabled' if account and account.discount_enabled }}>
+      <input type="checkbox" name="discount_enabled" value="1" id="discountToggle" {{ 'checked' if account and account.discount_enabled }} {{ 'disabled' if account and account.discount_enabled }}>
       <span class="switch-track"><span class="switch-thumb"></span></span>
       <span class="switch-text">
         <strong>套餐七折优惠</strong>
-        <small>
-          {% if account and account.discount_enabled %}
-            已于 {{ account.discount_enabled_at|datetime or '开号后开启' }} 开启，不可关闭
-          {% else %}
-            开启后按套餐原价的 70% 计费，<strong>开启后不可关闭</strong>
-          {% endif %}
-        </small>
+        <small>{% if account and account.discount_enabled %}已于 {{ account.discount_enabled_at|datetime or '开号后开启' }} 开启，不可关闭{% else %}开启后按套餐原价的 70% 计费，<strong>开启后不可关闭</strong>{% endif %}</small>
       </span>
     </label>
 
     <div class="fee-preview" id="feePreview"></div>
 
     <label class="full">备注
-      <textarea name="notes" rows="3" placeholder="安装地址、套餐详情、注意事项等">{{ account.notes if account else '' }}</textarea>
+      <textarea name="notes" rows="3" placeholder="套餐详情、办理人备注、注意事项等">{{ account.notes if account else '' }}</textarea>
     </label>
 
     <div class="form-actions">
       <button class="btn primary" type="submit">保存</button>
       <a class="btn ghost" href="{{ '/accounts/' ~ account.id if account else '/' }}">取消</a>
-      {% if account %}
-      <button class="btn danger" type="button" onclick="deleteAccount({{ account.id }})">删除</button>
-      {% endif %}
+      {% if account %}<button class="btn danger" type="button" onclick="deleteAccount({{ account.id }})">删除</button>{% endif %}
     </div>
   </form>
 </section>
@@ -179,17 +134,13 @@
       + (toggle.checked ? ' <span class="tag discount">7折</span>' : '')
       + ' · 每日扣款 <strong>¥' + daily.toFixed(2) + '</strong>';
     if (fixed > 0) {
-      html += '（<strong>按你填的每日扣费</strong>，七折开关不参与计算）'
-        + '<br><span class="muted small">清空「每日扣费」这一栏，就会改回按月费分摊：'
-        + '¥' + eff.toFixed(2) + ' ÷ ' + days + ' 天 = ¥' + (eff / days).toFixed(2) + '/天</span>';
+      html += '（<strong>按你填的每日扣费</strong>，七折开关不参与计算）';
     } else {
       html += '（按月费分摊：¥' + eff.toFixed(2) + ' ÷ ' + days + ' 天）';
     }
-    html += '<br>余额 ¥' + balance.toFixed(2)
-      + ' 约可用 ' + (daily > 0 ? Math.floor(balance / daily) : 0) + ' 天';
+    html += '<br>余额 ¥' + balance.toFixed(2) + ' 约可用 ' + (daily > 0 ? Math.floor(balance / daily) : 0) + ' 天';
     preview.innerHTML = html;
   }
-
   if (toggle) toggle.addEventListener('change', update);
   if (feeInput) feeInput.addEventListener('input', update);
   if (costInput) costInput.addEventListener('input', update);
