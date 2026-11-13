@@ -40,9 +40,10 @@ docker run -d \
   --restart unless-stopped \
   -p "$PORT":8080 \
   -v "$DATA_DIR":/data \
-  -e AI_BASE_URL="${AI_BASE_URL:-https://api.minimaxi.com/v1}" \
+  -e AI_BASE_URL="${AI_BASE_URL:-https://api.openai.com/v1}" \
   -e AI_API_KEY="${AI_API_KEY:-}" \
-  -e AI_MODEL="${AI_MODEL:-MiniMax-M3}" \
+  -e AI_MODEL="${AI_MODEL:-gpt-4o}" \
+  -e VISION_TIMEOUT="${VISION_TIMEOUT:-300}" \
   "$IMAGE"
 
 echo "==> 等待健康检查"

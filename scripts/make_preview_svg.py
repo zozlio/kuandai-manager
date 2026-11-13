@@ -19,7 +19,6 @@ NAMES = [
     "dashboard",
     "tab-abnormal",
     "rooms",
-    "groups",
     "recognize",
     "account-detail",
     "account-form",

@@ -16,8 +16,10 @@ services:
       # 左边换成你 NAS 上的实际路径（数据、账户都在这里，备份就复制这个目录）
       - /vol1/1000/docker/kuandai-data:/data
     environment:
-      # MiniMax 中国版。不填密钥的话，进去后在左侧「设置」页填也一样生效
-      AI_BASE_URL: "https://api.minimaxi.com/v1"
-      AI_MODEL: "MiniMax-M3"
+      # 通用 OpenAI 兼容接口占位值。不填密钥的话，进去后在左侧「设置」页填也一样生效
+      AI_BASE_URL: "https://api.openai.com/v1"
+      AI_MODEL: "gpt-4o"
       AI_API_KEY: ""
+      # 视觉接口单次超时（秒）：慢速端点常超时就调大，进「设置」页改也一样
+      VISION_TIMEOUT: "300"
       TZ: "Asia/Shanghai"
