@@ -19,17 +19,17 @@
 <section class="kpis">
   <div class="kpi">
     <div class="kpi-label">今日收入</div>
-    <div class="kpi-value">¥{{ today_income|money }}</div>
+    <div class="kpi-value" data-count>¥{{ today_income|money }}</div>
     <div class="kpi-sub">统计日 {{ day }}</div>
   </div>
   <div class="kpi">
     <div class="kpi-label">今日每日扣费</div>
-    <div class="kpi-value">¥{{ today_cost|money }}</div>
+    <div class="kpi-value" data-count>¥{{ today_cost|money }}</div>
     <div class="kpi-sub">所有宽带账号合计</div>
   </div>
   <div class="kpi {{ 'good' if today_profit > 0 else ('bad' if today_profit < 0 else '') }}">
     <div class="kpi-label">今日净利润</div>
-    <div class="kpi-value">¥{{ today_profit|money }}</div>
+    <div class="kpi-value" data-count>¥{{ today_profit|money }}</div>
     <div class="kpi-sub">收入 − 扣费</div>
   </div>
   <div class="kpi">
@@ -60,7 +60,6 @@
           {{ platforms|length }} 个平台
         </span>
       </div>
-
       {% for platform_name, rows in platforms.items() %}
       <div class="platform-block">
         <div class="platform-title">
@@ -71,43 +70,25 @@
           <table class="table">
             <thead>
               <tr>
-                <th>操作</th>
-                <th>宽带账号</th>
-                <th>节点号</th>
-                <th class="num">{{ day }} 收入</th>
-                <th>最近几天</th>
-                <th>备注</th>
+                <th>宽带账号</th><th>节点号</th><th class="num">{{ day }} 收入</th><th>最近 7 天</th><th>备注</th><th></th>
               </tr>
             </thead>
             <tbody>
             {% for row in rows %}
-              <tr>
-                <td class="ops">
-                  <button type="button" class="btn tiny"
-                          onclick="recordIncome({{ row.account.id }}, '{{ row.account.phone }}', '{{ day }}')">记收入</button>
-                  <a href="/accounts/{{ row.account.id }}">详情</a>
-                </td>
+              <tr style="--i: {{ loop.index0 }}">
                 <td class="strong">
                   <a href="/accounts/{{ row.account.id }}">{{ row.account.phone }}</a>
-                  <button type="button" class="copy-btn" title="复制手机号"
-                          onclick="copyText('{{ row.account.phone }}', this)"
-                          aria-label="复制手机号">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="9" y="9" width="12" height="12" rx="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  <button type="button" class="copy-btn" title="复制手机号" onclick="copyText('{{ row.account.phone }}', this)" aria-label="复制手机号">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                     </svg>
                   </button>
                   <div class="muted small mono">
                     {% if row.account.broadband_account %}
                       {{ row.account.broadband_account }}
-                      <button type="button" class="copy-btn" title="复制宽带账号"
-                              onclick="copyText('{{ row.account.broadband_account }}', this)"
-                              aria-label="复制宽带账号">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                          <rect x="9" y="9" width="12" height="12" rx="2"/>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      <button type="button" class="copy-btn" title="复制宽带账号" onclick="copyText('{{ row.account.broadband_account }}', this)" aria-label="复制宽带账号">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                         </svg>
                       </button>
                     {% else %}
@@ -118,13 +99,9 @@
                 <td class="mono">
                   {% if row.account.node_account %}
                     {{ row.account.node_account }}
-                    <button type="button" class="copy-btn" title="复制节点号"
-                            onclick="copyText('{{ row.account.node_account }}', this)"
-                            aria-label="复制节点号">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                           stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="12" height="12" rx="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    <button type="button" class="copy-btn" title="复制节点号" onclick="copyText('{{ row.account.node_account }}', this)" aria-label="复制节点号">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                       </svg>
                     </button>
                   {% else %}
@@ -132,14 +109,42 @@
                   {% endif %}
                 </td>
                 <td class="num income">¥{{ row.income|money }}</td>
-                <td class="muted small">
-                  {% for inc in row.incomes[:4] %}
-                    <div>{{ inc.day }} · ¥{{ inc.amount|money }}</div>
+                <td class="spark-cell">
+                  {% set days7 = row.incomes[:7] %}
+                  {% if days7 %}
+                  {% set vals = days7 | reverse | list %}
+                  {% set mx = vals | map(attribute='amount') | map('float') | max %}
+                  <svg class="spark" viewBox="0 0 96 28" role="img" aria-label="最近 {{ vals|length }} 天收入趋势">
+                    {% set ns = namespace(pts="", dots=[]) %}
+                    {% for inc in vals %}
+                      {% set x = 4 + (88 / (vals|length - 1 or 1)) * loop.index0 %}
+                      {% set y = 24 - (20 * (inc.amount | float) / (mx or 1)) %}
+                      {% set ns.pts = ns.pts ~ (x ~ ',' ~ '%.1f' % y ~ ' ') %}
+                      {% set ns.dots = ns.dots + [{'x': x, 'y': y, 'inc': inc}] %}
+                    {% endfor %}
+                    <polyline points="{{ ns.pts | trim }}" fill="none" stroke="var(--brand)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" class="spark-line"{% if vals|length > 1 %} style="stroke-dasharray: {{ (vals|length - 1) * 30 }}; stroke-dashoffset: {{ (vals|length - 1) * 30 }}"{% endif %}/>
+                    {% for d in ns.dots %}
+                    <circle cx="{{ d.x }}" cy="{{ '%.1f' % d.y }}" r="2.2" fill="var(--brand)">
+                      <title>{{ d.inc.day }} ¥{{ d.inc.amount|money }}</title>
+                    </circle>
+                    {% endfor %}
+                  </svg>
                   {% else %}
-                    <span>还没有收入记录</span>
-                  {% endfor %}
+                  <span class="muted small">还没有收入记录</span>
+                  {% endif %}
                 </td>
                 <td class="muted small">{{ row.account.notes or '—' }}</td>
+                <td class="row-actions" data-menu>
+                  <a class="ra-detail" href="/accounts/{{ row.account.id }}">详情</a>
+                  <button type="button" class="ra-btn" aria-expanded="false" aria-label="更多操作">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>
+                    </svg>
+                  </button>
+                  <div class="ra-menu" role="menu">
+                    <button type="button" role="menuitem" onclick="recordIncome({{ row.account.id }}, '{{ row.account.phone }}', '{{ day }}')">记收入</button>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
             </tbody>
@@ -152,10 +157,8 @@
   {% else %}
   <div class="empty">
     <span class="empty-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
-           stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/>
-        <path d="M6 7h.01M6 17h.01"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/>
       </svg>
     </span>
     还没有宽带账号。点「新增账号」建一条，填上机房、节点平台和节点号。
@@ -166,44 +169,18 @@
 
 {% block scripts %}
 <script>
-  window.recordIncome = async function (accountId, phone, day) {
-    const result = await showModal({
-      title: '记收入：' + phone,
-      okText: '记上',
-      body: `
-        <div class="modal-field">
-          <label>日期</label>
-          <input id="incDay" type="date" value="${day}">
-        </div>
-        <div class="modal-field">
-          <label>收入金额（元）</label>
-          <input id="incAmount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
-        </div>
-        <div class="modal-field">
-          <label>备注（可留空）</label>
-          <input id="incNote" type="text" placeholder="例如 平台结算">
-        </div>`,
-      onMount: () => document.getElementById('incAmount').focus(),
-      onOk: () => {
-        const amount = parseFloat(document.getElementById('incAmount').value);
-        if (!amount && amount !== 0) { showFieldError('填一下收入金额'); return false; }
-        return {
-          day: document.getElementById('incDay').value,
-          amount: amount,
-          note: document.getElementById('incNote').value.trim(),
-        };
-      },
+  (function () {
+    const menus = document.querySelectorAll('.row-actions');
+    const closeAll = (except) => {
+      menus.forEach((m) => { if (m !== except) { m.classList.remove('open'); const b = m.querySelector('.ra-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } });
+    };
+    menus.forEach((m) => {
+      const btn = m.querySelector('.ra-btn');
+      btn.addEventListener('click', (e) => { e.stopPropagation(); const wasOpen = m.classList.contains('open'); closeAll(m); m.classList.toggle('open', !wasOpen); btn.setAttribute('aria-expanded', String(!wasOpen)); });
+      m.querySelectorAll('.ra-menu button, .ra-menu a').forEach((el) => { el.addEventListener('click', () => closeAll()); });
     });
-    if (!result) return;
-
-    const fd = new FormData();
-    fd.append('day', result.day);
-    fd.append('amount', result.amount);
-    fd.append('note', result.note);
-    const res = await fetch('/api/accounts/' + accountId + '/income', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!res.ok || data.error) { alert(data.error || '记录失败'); return; }
-    location.reload();
-  };
+    document.addEventListener('click', () => closeAll());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+  })();
 </script>
 {% endblock %}
