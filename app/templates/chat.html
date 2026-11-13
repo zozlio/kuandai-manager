@@ -4,7 +4,7 @@
 
 <div class="page-head">
   <div>
-    <h1>AI 助手</h1>
+    <h1>AI</h1>
     <p class="page-sub">
       {{ '已接入 ' ~ ai.model ~ ' · AI 只能看到你的真实台账，不会编造数据' if ai.configured else '未配置 AI 接口，配置后即可用大白话查询' }}
     </p>
@@ -16,10 +16,14 @@
   {% endif %}
 </div>
 
+<div class="ai-tabs">
+  <a class="ai-tab" href="/recognize">识图</a>
+  <a class="ai-tab active" href="/chat">问答</a>
+</div>
+
 {% if not ai.configured %}
 <div class="alert warn">
-  AI 功能未启用。到 <a href="/settings">「设置」页</a> 填上接口地址、密钥和模型名就能用，
-  填完立刻生效，不用重启容器。
+  AI 功能未启用。到 <a href="/settings">「设置」页</a> 填上接口地址、密钥和模型名就能用，填完立刻生效，不用重启容器。
 </div>
 {% endif %}
 
