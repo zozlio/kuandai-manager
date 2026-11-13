@@ -13,3 +13,10 @@ data/
 
 # 预览图：仓库只收 SVG（内嵌 PNG），原始 PNG 不入库
 preview/*.png
+
+# AI 识图测试样图（本地 mock，不入库）
+tests/fixtures/
+
+# 浏览器单进程模式的崩溃转储，绝不能入库
+core
+core.*
