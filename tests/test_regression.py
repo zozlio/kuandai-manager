@@ -83,6 +83,18 @@ class TestAmountAndDailyCost(unittest.TestCase):
         self.assertEqual(services.daily_amount(account, date(2026, 11, 8)), Decimal("0.00"))
 
 
+class _FakeResponse:
+    """伪造 httpx.Response，不真正发网络请求。"""
+
+    def __init__(self, status_code, json_data, text=""):
+        self.status_code = status_code
+        self._json = json_data
+        self.text = text
+
+    def json(self):
+        return self._json
+
+
 class TestVisionParsing(unittest.TestCase):
     """AI 返回内容的解析要够宽容。"""
 
@@ -126,6 +138,124 @@ class TestVisionParsing(unittest.TestCase):
             vision.vision_configured({"vision_model": "x", "vision_api_key": "k"})
         )
 
+    def test_415_error_points_to_format_setting(self):
+        """415 要能指路：提示里必须带「视觉格式」和「OpenAI 兼容」，原文只进日志。"""
+        resp = _FakeResponse(415, {}, text='{"error":{"message":"Unsupported Media Type: Content-Type must be application/json"}}')
+        with self.assertRaisesRegex(RuntimeError, "视觉格式") as ctx:
+            vision._read_reply(resp)
+        msg = str(ctx.exception)
+        self.assertIn("OpenAI 兼容", msg)
+        self.assertIn("415", msg)
+        # 端点英文原文不要直接甩给用户
+        self.assertNotIn("Unsupported Media Type: Content-Type", msg)
+
+    def test_truncated_reply_raises(self):
+        """finish_reason == length 说明生成被截断，不能把半截 JSON 给解析器。"""
+        resp = _FakeResponse(200, {
+            "choices": [{
+                "message": {"content": "[{\"amount\": 1.5}"},  # 半截
+                "finish_reason": "length",
+            }]
+        })
+        with self.assertRaisesRegex(RuntimeError, "截断"):
+            vision._read_reply(resp)
+
+    def test_ok_reply_reads_content(self):
+        resp = _FakeResponse(200, {
+            "choices": [{
+                "message": {"content": '[{"amount": 1.5}]'},
+                "finish_reason": "stop",
+            }]
+        })
+        self.assertEqual(vision._read_reply(resp), '[{"amount": 1.5}]')
+
+    def test_max_tokens_falls_back_to_default(self):
+        """设置项没配时用默认 8192，不写死在别处。"""
+        self.assertEqual(vision._max_tokens({}), 8192)
+        self.assertEqual(vision._max_tokens({"ai_max_tokens": "4096"}), 4096)
+        self.assertEqual(vision._max_tokens({"ai_max_tokens": ""}), 8192)
+
+    def test_retry_on_429_then_ok(self):
+        """429 限流要重试，重试通了就正常返回。"""
+        import httpx
+        responses = [
+            _FakeResponse(429, {}, text="too many"),
+            _FakeResponse(200, {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}),
+        ]
+        calls = []
+        payloads = []
+
+        class _Client:
+            def __init__(self, *a, **kw):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None, files=None, headers=None):
+                calls.append(url)
+                payloads.append(json)
+                return responses.pop(0)
+
+        original = vision.httpx.Client
+        vision.httpx.Client = _Client
+        try:
+            out = vision._call_openai(
+                {"vision_base_url": "http://x/v1", "vision_api_key": "k", "vision_model": "m"},
+                b"img", "a.png",
+            )
+        finally:
+            vision.httpx.Client = original
+        self.assertEqual(out, "ok")
+        self.assertEqual(len(calls), 2)  # 429 一次 + 重试成功一次
+        # 请求体里必须带 max_tokens（默认 8192）
+        self.assertEqual(payloads[0]["max_tokens"], 8192)
+
+    def test_vision_timeout_falls_back_to_default(self):
+        """视觉超时走设置项，没配时用默认 300，不写死在别处。"""
+        self.assertEqual(vision._vision_timeout({}), 300.0)
+        self.assertEqual(vision._vision_timeout({"vision_timeout": "600"}), 600.0)
+        self.assertEqual(vision._vision_timeout({"vision_timeout": ""}), 300.0)
+        self.assertEqual(vision._vision_timeout({"vision_timeout": "abc"}), 300.0)
+
+    def test_read_timeout_gives_chinese_message(self):
+        """读超时要转成可自救的中文提示，httpx 的英文原文不能给用户看。"""
+        import httpx
+
+        class _Client:
+            def __init__(self, *a, **kw):
+                raise httpx.ReadTimeout("timed out")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        original = vision.httpx.Client
+        vision.httpx.Client = _Client
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                vision._call_openai(
+                    {
+                        "vision_base_url": "http://x/v1",
+                        "vision_api_key": "k",
+                        "vision_model": "m",
+                        "vision_timeout": "300",
+                    },
+                    b"img", "a.png",
+                )
+        finally:
+            vision.httpx.Client = original
+        msg = str(ctx.exception)
+        self.assertIn("识别超时", msg)
+        self.assertIn("300", msg)
+        self.assertIn("换更快的模型", msg)
+        self.assertNotIn("timed out", msg)
+
 
 class TestChartSvg(unittest.TestCase):
     """图表是纯 SVG 生成的，不依赖外网。"""
@@ -137,6 +267,48 @@ class TestChartSvg(unittest.TestCase):
         self.assertTrue(svg.strip().startswith("<svg"))
         self.assertIn("</svg>", svg)
         self.assertIn("2026-11-08", svg)
+
+    def test_bar_chart_value_labels(self):
+        """柱顶数值标签：与 X 轴日期同频抽样，金额走 |money 口径，不压进柱子。"""
+        import re
+
+        daily = [
+            {"day": f"2026-11-{d:02d}", "amount": Decimal(f"{d}.50")}
+            for d in range(1, 15)
+        ]
+        svg = services.bar_chart_svg(daily, "#3b82f6")
+
+        pattern = (
+            r'<text x="[\d.]+" y="([\d.]+)" class="chart-value"[^>]*>'
+            r"([\d,]+\.\d{2})</text>"
+        )
+
+        # 14 天 label_step=2：抽样第 0,2,4,6,8,10,12 根 + 最后 1 根 = 8 个标签
+        labels = re.findall(pattern, svg)
+        self.assertEqual(
+            [amount for _, amount in labels],
+            ["1.50", "3.50", "5.50", "7.50", "9.50", "11.50", "13.50", "14.50"],
+        )
+
+        # 每个标签都落在对应柱顶上方 0–4px，不压进柱子里
+        rect_ys = [
+            float(y)
+            for y in re.findall(r'<rect x="[\d.]+" y="([\d.]+)"', svg)
+        ]
+        sampled = [0, 2, 4, 6, 8, 10, 12, 13]
+        for (label_y, _), bar_index in zip(labels, sampled):
+            label_y = float(label_y)
+            rect_y = rect_ys[bar_index]
+            self.assertTrue(
+                0 <= rect_y - label_y <= 4, (label_y, rect_y)
+            )
+
+        # hover tooltip（<title>）保留，是兜底
+        self.assertIn("<title>2026-11-01 ¥1.50</title>", svg)
+
+        # 7 天窗口 label_step=1：每根柱子都标
+        svg7 = services.bar_chart_svg(daily[:7])
+        self.assertEqual(len(re.findall(pattern, svg7)), 7)
 
     def test_donut_svg(self):
         svg = services.donut_svg(
@@ -204,7 +376,6 @@ class ServiceLayerTest(unittest.TestCase):
             balance=kw.pop("balance", Decimal("500")),
             total_recharged=kw.pop("total_recharged", Decimal("500")),
             daily_cost=kw.pop("daily_cost", Decimal("12.50")),
-            install_address=kw.pop("install_address", "罗山县二里湾小区"),
             **kw,
         )
         self.db.add(account)
@@ -289,8 +460,8 @@ class ServiceLayerTest(unittest.TestCase):
 
     # -- 两级匹配 ------------------------------------------------------
 
-    def test_match_by_phone_then_node_account(self):
-        """先认宽带账号，再核对节点号。"""
+    def test_match_by_node_account_first(self):
+        """节点号是第一主键：截图里几乎都有节点号，唯一命中直接落账号。"""
         account = self._make_account()
         self._setup_node(account, node_account="srv001")
         out = services.match_recognized_items(
@@ -299,8 +470,37 @@ class ServiceLayerTest(unittest.TestCase):
         )
         self.assertEqual(out[0]["status"], "matched")
         self.assertEqual(out[0]["account_id"], account.id)
-        self.assertEqual(out[0]["account_reason"], "手机号")
+        self.assertEqual(out[0]["account_reason"], "节点号")
         self.assertEqual(out[0]["node_reason"], "节点号一致")
+
+    def test_match_by_phone_when_no_node(self):
+        """台账没登记节点号时，回落到按手机号认。"""
+        account = self._make_account()
+        self._setup_node(account, node_account="")  # 台账里节点号是空的
+        out = services.match_recognized_items(
+            self.db,
+            [{"broadband": "13400001111", "node_account": "srv999", "amount": 88.5}],
+        )
+        self.assertEqual(out[0]["status"], "matched")
+        self.assertEqual(out[0]["account_id"], account.id)
+        self.assertEqual(out[0]["account_reason"], "手机号")
+
+    def test_match_multi_candidate_node(self):
+        """同一节点号挂在多个账号上：不许静默选一条，要列候选让人挑。"""
+        a1 = self._make_account(phone="13400001111")
+        a2 = self._make_account(phone="13400002222")
+        self._setup_node(a1, node_account="shared")
+        self._setup_node(a2, node_account="shared")
+        self.db.commit()
+        out = services.match_recognized_items(
+            self.db,
+            [{"broadband": "", "node_account": "shared", "amount": 10.0}],
+        )
+        self.assertEqual(out[0]["status"], "multi_candidate")
+        self.assertEqual(out[0]["account_id"], None)
+        cand = out[0]["candidates"]
+        self.assertEqual(len(cand), 2)
+        self.assertEqual({c["id"] for c in cand}, {a1.id, a2.id})
 
     def test_match_node_account_mismatch(self):
         """账号认出来了但节点号对不上，要标出来让人确认。"""
@@ -353,13 +553,6 @@ class ServiceLayerTest(unittest.TestCase):
             {"机房", "当前电费", "管理线", "限速", "注销", "欠费"},
         )
         self.assertEqual(len(ABNORMAL_REASONS), 6)
-
-    def test_search_by_install_address(self):
-        self._make_account(phone="13400001111", install_address="罗山县二里湾小区")
-        self._make_account(phone="13400002222", install_address="光山县五楼村")
-        found = services.search_accounts(self.db, "二里湾", "", "normal")
-        self.assertEqual(len(found), 1)
-        self.assertEqual(found[0].phone, "13400001111")
 
     def test_search_by_category(self):
         a = self._make_account(phone="13400001111")
@@ -419,7 +612,6 @@ class HttpTest(unittest.TestCase):
             "/?days=7",
             "/?days=30",
             "/nodes",
-            "/groups",
             "/recognize",
             "/settings",
             "/reminders",
@@ -428,6 +620,89 @@ class HttpTest(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
+
+    def test_manual_remind_entrance_removed(self):
+        """「发起催缴」手动入口已下线：详情页不再有发起催缴表单/路由。"""
+        account_id = self._new_account()
+        detail = self.client.get(f"/accounts/{account_id}")
+        self.assertNotIn("发起催缴", detail.text)
+        self.assertNotIn("加入提醒列表", detail.text)
+        # 手动催缴路由已删，POST 应 404
+        resp = self.client.post(
+            f"/accounts/{account_id}/remind",
+            data={"message": "测试"},
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 404)
+        # 自动催缴提醒展示还在（路由保留）
+        reminders = self.client.get("/reminders")
+        self.assertIn("催缴提醒", reminders.text)
+
+    def test_main_pages_render_with_content(self):
+        """渲染级回归：主要页面不仅 200，关键内容必须真的渲染出来。
+
+        教训：Jinja 模板语法错（元组解包）会让页面 500，
+        只验 status_code 的路由测试抓不到，所以这里断言关键 DOM。
+        """
+        import datetime as _dt
+
+        resp = self.client.post(
+            "/accounts/new",
+            data={
+                "phone": "13400001111",
+                "room": "测试机房",
+                "platform": "测试云",
+                "node_account": "ND-TEST-01",
+                "monthly_fee": "399",
+                "balance": "500",
+            },
+            follow_redirects=False,
+        )
+        account_id = int(resp.headers["location"].rstrip("/").split("/")[-1])
+
+        db = database._session_factory()
+        try:
+            today = _dt.date.today()
+            for i in range(7):
+                db.add(DailyIncome(
+                    account_id=account_id,
+                    day=(today - _dt.timedelta(days=i)).strftime("%Y-%m-%d"),
+                    amount=10.0 + i,
+                ))
+            db.commit()
+        finally:
+            db.close()
+
+        # 首页：统计卡 + 主表格都在
+        home = self.client.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertIn("今日平台收入", home.text)
+        self.assertIn("13400001111", home.text)
+
+        # 机房总览：sparkline SVG 真渲染出来（修 Jinja 元组 500 的回归点）
+        rooms = self.client.get("/rooms")
+        self.assertEqual(rooms.status_code, 200)
+        self.assertIn('<svg class="spark"', rooms.text)
+        self.assertIn("测试机房", rooms.text)
+
+        # 账号详情：meta 两行网格 + 收入表
+        detail = self.client.get(f"/accounts/{account_id}")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn("meta-grid", detail.text)
+        self.assertIn("收入", detail.text)
+
+        # 其余主要页面：200 + 各自的页面骨架
+        for path, marker in (
+            ("/reminders", "提醒"),
+            ("/recognize", "识图"),
+            ("/chat", "AI"),
+            ("/export", "导出"),
+            ("/settings", "设置"),
+        ):
+            with self.subTest(path=path):
+                page = self.client.get(path)
+                self.assertEqual(page.status_code, 200)
+                self.assertIn(marker, page.text)
 
     # -- 账号 ----------------------------------------------------------
 
@@ -440,7 +715,6 @@ class HttpTest(unittest.TestCase):
                 "registrant": "张三",
                 "monthly_fee": "399",
                 "balance": "500",
-                "install_address": "罗山县二里湾小区",
                 "daily_cost": "12.5",
             },
             follow_redirects=False,
@@ -450,30 +724,26 @@ class HttpTest(unittest.TestCase):
 
         detail = self.client.get(f"/accounts/{account_id}")
         self.assertEqual(detail.status_code, 200)
-        self.assertIn("罗山县二里湾小区", detail.text)
 
         db = database._session_factory()
         try:
             account = db.get(Account, account_id)
-            self.assertEqual(account.install_address, "罗山县二里湾小区")
             self.assertEqual(account.daily_cost, Decimal("12.50"))
             self.assertEqual(account.category, "normal")
         finally:
             db.close()
 
-    def test_install_address_is_last_column(self):
-        """安装地址要放在列表最后一列。"""
-        self.client.post(
-            "/accounts/new",
-            data={"phone": "13400001111", "install_address": "罗山县二里湾小区"},
-            follow_redirects=False,
-        )
-        home = self.client.get("/")
-        self.assertIn("安装地址", home.text)
-        # 最后一列表头就是「安装地址」
-        head = home.text.split("<thead")[1].split("</thead>")[0]
-        last_th = head.split("<th")[-1]
-        self.assertIn("安装地址", last_th)
+    def test_install_address_column_kept_in_db(self):
+        """install_address 数据库列保留（防误删 PVE 已有数据），只是界面/导出入口下线。"""
+        self._new_account()
+        db = database._session_factory()
+        try:
+            account = db.query(Account).one()
+            self.assertIsNotNone(account)
+            # 模型字段还在，默认空串（不写入了）
+            self.assertEqual(account.install_address, "")
+        finally:
+            db.close()
 
     # -- 节点与收入 ----------------------------------------------------
 
@@ -553,68 +823,6 @@ class HttpTest(unittest.TestCase):
         self.assertIn("99.90", home.text)
         self.assertIn("今日平台收入", home.text)
         self.assertIn("净利润", home.text)
-
-    # -- 分组 ----------------------------------------------------------
-
-    def test_group_create_and_assign(self):
-        account_id = self._new_account()
-        resp = self.client.post(
-            "/groups",
-            data={
-                "name": "机房A",
-                "install_location": "罗山县城东",
-                "manage_phone": "13900001111",
-                "manage_account": "GD8899",
-                "manage_expire_at": "2026-12-31",
-            },
-            follow_redirects=False,
-        )
-        self.assertEqual(resp.status_code, 303)
-
-        groups_page = self.client.get("/groups")
-        self.assertIn("机房A", groups_page.text)
-        self.assertIn("罗山县城东", groups_page.text)
-        self.assertIn("13900001111", groups_page.text)
-
-        db = database._session_factory()
-        try:
-            group = db.query(services.AccountGroup).filter(
-                services.AccountGroup.name == "机房A"
-            ).one()
-            group_id = group.id
-        finally:
-            db.close()
-
-        assign = self.client.post(
-            f"/accounts/{account_id}/group",
-            data={"group_id": str(group_id)},
-            follow_redirects=False,
-        )
-        self.assertEqual(assign.status_code, 303)
-
-        home = self.client.get("/")
-        self.assertIn("机房A", home.text)
-
-    def test_delete_group_keeps_account(self):
-        account_id = self._new_account()
-        self.client.post(
-            "/groups", data={"name": "临时组"}, follow_redirects=False
-        )
-        db = database._session_factory()
-        try:
-            group = db.query(services.AccountGroup).filter(
-                services.AccountGroup.name == "临时组"
-            ).one()
-            group_id = group.id
-            self.client.post(
-                f"/accounts/{account_id}/group", data={"group_id": str(group_id)}
-            )
-            self.client.post(f"/groups/{group_id}/delete", follow_redirects=False)
-            account = db.get(Account, account_id)
-            self.assertIsNotNone(account)
-            self.assertIsNone(account.group_id)
-        finally:
-            db.close()
 
     # -- 异常 ----------------------------------------------------------
 
@@ -756,6 +964,38 @@ class HttpTest(unittest.TestCase):
         recognize = self.client.get("/recognize")
         self.assertNotIn("视觉模型还没配置", recognize.text)
 
+    def test_legacy_vision_format_migrated_to_openai(self):
+        """DB 存旧格式 minimax_vl + 非 MiniMax 端点 → 自动迁移成 openai，并留日志。"""
+        import logging
+
+        db = database._session_factory()
+        try:
+            db.add(AppSetting(key="vision_format", value="minimax_vl"))
+            db.add(AppSetting(key="vision_base_url", value="https://developer.amd.com.cn/radeon/api/v1"))
+            db.commit()
+
+            with self.assertLogs("kuandai.services", level="INFO") as log_ctx:
+                config = services.get_vision_config(db)
+
+            self.assertEqual(config["vision_format"], "openai")
+            self.assertIn("视觉格式自动迁移", "\n".join(log_ctx.output))
+            # 迁完再读还是 openai，不会反复迁
+            self.assertEqual(services.get_vision_config(db)["vision_format"], "openai")
+        finally:
+            db.close()
+
+    def test_legacy_vision_format_kept_for_minimax_endpoint(self):
+        """端点就是 MiniMax 官方的，旧格式继续有效，不迁。"""
+        db = database._session_factory()
+        try:
+            db.add(AppSetting(key="vision_format", value="minimax_vl"))
+            db.add(AppSetting(key="vision_base_url", value="https://api.minimaxi.com/v1"))
+            db.commit()
+            config = services.get_vision_config(db)
+            self.assertEqual(config["vision_format"], "minimax_vl")
+        finally:
+            db.close()
+
     def test_vision_settings_keep_key_when_blank(self):
         """密钥留空表示保留原来的，不能被清掉。"""
         self.client.post(
@@ -775,6 +1015,40 @@ class HttpTest(unittest.TestCase):
             self.assertEqual(config["vision_model"], "M-VL-2")
         finally:
             db.close()
+
+    def test_save_vision_timeout(self):
+        """视觉超时存库、DB 优先；留空表示不改，设置页要回显。"""
+        self.client.post(
+            "/settings/vision",
+            data={
+                "vision_api_key": "sk-t",
+                "vision_model": "M-VL",
+                "vision_timeout": "600",
+            },
+            follow_redirects=False,
+        )
+        db = database._session_factory()
+        try:
+            config = services.get_vision_config(db)
+            self.assertEqual(config["vision_timeout"], "600")
+        finally:
+            db.close()
+
+        # 留空表示不改，不能把 600 清掉
+        self.client.post(
+            "/settings/vision",
+            data={"vision_model": "M-VL-2"},
+            follow_redirects=False,
+        )
+        db = database._session_factory()
+        try:
+            config = services.get_vision_config(db)
+            self.assertEqual(config["vision_timeout"], "600")
+        finally:
+            db.close()
+
+        page = self.client.get("/settings")
+        self.assertIn('value="600"', page.text)
 
 
     # -- 机房（界面上叫机房，数据库里还是 nodes 表）-------------------
@@ -890,8 +1164,8 @@ class HttpTest(unittest.TestCase):
 
     # -- 宽带账号锁定 / 运营商下拉 ------------------------------------
 
-    def test_broadband_account_cannot_be_changed(self):
-        """宽带账号是身份标识：绕过页面直接 POST 改也不生效。"""
+    def test_broadband_account_can_be_changed(self):
+        """宽带账号现在可改（此前锁定不可改，用户要求放开）。"""
         resp = self.client.post(
             "/accounts/new",
             data={"phone": "13400001111", "broadband_account": "TEST-BB-0001"},
@@ -899,16 +1173,43 @@ class HttpTest(unittest.TestCase):
         )
         account_id = int(resp.headers["location"].rstrip("/").split("/")[-1])
 
-        # 试着改成别的
+        # 改成新的
         self.client.post(
             f"/accounts/{account_id}/edit",
-            data={"phone": "13400001111", "broadband_account": "偷偷改的账号"},
+            data={"phone": "13400001111", "broadband_account": "NEW-BB-0002"},
             follow_redirects=False,
         )
         db = database._session_factory()
         try:
             account = db.get(Account, account_id)
-            self.assertEqual(account.broadband_account, "TEST-BB-0001")  # 没被改掉
+            self.assertEqual(account.broadband_account, "NEW-BB-0002")  # 改生效
+        finally:
+            db.close()
+
+    def test_broadband_account_duplicate_rejected(self):
+        """宽带账号不能改成别的账号已占用的值。"""
+        self.client.post(
+            "/accounts/new",
+            data={"phone": "13400001111", "broadband_account": "DUP-BB-0001"},
+            follow_redirects=False,
+        )
+        resp2 = self.client.post(
+            "/accounts/new",
+            data={"phone": "13400002222", "broadband_account": "DUP-BB-0002"},
+            follow_redirects=False,
+        )
+        account2_id = int(resp2.headers["location"].rstrip("/").split("/")[-1])
+
+        # 把账号2改成账号1已占用的值 → 应被拒
+        self.client.post(
+            f"/accounts/{account2_id}/edit",
+            data={"phone": "13400002222", "broadband_account": "DUP-BB-0001"},
+            follow_redirects=False,
+        )
+        db = database._session_factory()
+        try:
+            account2 = db.get(Account, account2_id)
+            self.assertEqual(account2.broadband_account, "DUP-BB-0002")  # 没被改成重复值
         finally:
             db.close()
 
@@ -993,7 +1294,7 @@ class HttpTest(unittest.TestCase):
         lines = text.strip().splitlines()
         self.assertIn("手机号", lines[0])
         self.assertIn("每日扣费", lines[0])
-        self.assertIn("安装地址", lines[0])
+        self.assertNotIn("安装地址", lines[0])  # 该列已下线，不再导出
         self.assertTrue(any("13400001111" in line for line in lines[1:]))
 
     def test_export_csv_files_all_ok(self):
@@ -1001,7 +1302,6 @@ class HttpTest(unittest.TestCase):
             "/export/accounts.csv",
             "/export/nodes.csv",
             "/export/incomes.csv",
-            "/export/groups.csv",
             "/export/transactions.csv",
         ):
             with self.subTest(path=path):

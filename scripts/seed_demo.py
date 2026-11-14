@@ -30,6 +30,7 @@ from app.services import money  # noqa: E402
 
 random.seed(20261108)
 
+# 演示账号：手机号 / 宽带账号 / 注册码 / 注册人 / 手机卡使用人 / 机房 / 平台 / 节点号 / 月费 / 七折 / 余额
 ACCOUNTS = [
     ("13400001111", "TEST-BB-0001", "6051111111", "张三", "张三", "香港机房", "某某云", "ND-HK-001", 399, True, 320.00),
     ("13400002222", "TEST-BB-0002", "6052222222", "李四", "李四", "香港机房", "某某云", "ND-HK-002", 399, True, 180.50),
@@ -41,6 +42,7 @@ ACCOUNTS = [
     ("13400008888", "TEST-BB-0008", "6058888888", "吴十", "吴十", "美西机房", "另一云", "ND-US-001", 399, False, 260.00),
 ]
 
+# 这两条标成异常（原因 code）
 ABNORMAL = {
     "13400007777": ("arrears", "欠费三天了"),
     "13400008888": ("machine_room", "机房检修"),
@@ -51,6 +53,7 @@ def main() -> int:
     database.init_engine()
     db = database._session_factory()
     try:
+        # 清掉旧的演示数据（手机号 1340000 开头的）
         for a in db.query(Account).filter(Account.phone.like("1340000%")).all():
             db.delete(a)
         db.commit()
@@ -83,6 +86,7 @@ def main() -> int:
             db.add(account)
             db.flush()
 
+            # 开号流水
             db.add(
                 Transaction(
                     account_id=account.id,
@@ -93,6 +97,7 @@ def main() -> int:
                 )
             )
 
+            # 近 14 天的每日收入
             for days_ago in range(14, -1, -1):
                 day = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
                 base = random.uniform(45, 130)
@@ -111,6 +116,7 @@ def main() -> int:
                     )
                 )
 
+            # 异常账号
             if phone in ABNORMAL:
                 reason, note = ABNORMAL[phone]
                 account.category = "abnormal"
@@ -119,6 +125,7 @@ def main() -> int:
                 account.abnormal_at = datetime.now() - timedelta(days=2)
 
         db.commit()
+
         print(f"演示数据已灌好：{len(ACCOUNTS)} 条账号")
         print("  其中 2 条标成了异常账号")
         print("  每条账号带近 15 天的每日收入")

@@ -6,7 +6,7 @@ import json
 import logging
 import re
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
@@ -42,7 +42,6 @@ from .models import (
     TX_LABELS,
     TX_RECHARGE,
     Account,
-    AccountGroup,
     DailyIncome,
     Reminder,
     Transaction,
@@ -191,7 +190,6 @@ def index(
                 "account": account,
                 "flags": services.account_flags(account),
                 "income": incomes.get(account.id, Decimal("0.00")),
-                "group": account.group,
             }
         )
 
@@ -210,7 +208,6 @@ def index(
             tab=category,
             days=days,
             dashboard=dashboard,
-            groups=services.list_groups(db),
             bar_svg=services.bar_chart_svg(dashboard["daily"], chart_color),
             donut_svg=services.donut_svg(dashboard["platforms"], days),
             palette=services.CHART_PALETTE,
@@ -280,8 +277,8 @@ def new_account_form(request: Request, db: Session = Depends(get_db)):
             db=db,
             account=None,
             form={},
+            error=request.query_params.get("error", ""),
             stats=services.list_stats(db),
-            groups=services.list_groups(db),
         ),
     )
 
@@ -301,9 +298,7 @@ def create_account(
     status: str = Form(STATUS_ACTIVE),
     notes: str = Form(""),
     discount_enabled: str = Form(""),
-    install_address: str = Form(""),
     daily_cost: str = Form(""),
-    group_id: str = Form(""),
     room: str = Form(""),
     platform: str = Form(""),
     node_account: str = Form(""),
@@ -331,9 +326,7 @@ def create_account(
         discount_enabled=bool(discount_enabled),
         discount_enabled_at=datetime.now() if discount_enabled else None,
         total_recharged=opening_balance,
-        install_address=services.fix_text(install_address.strip()),
         daily_cost=services.money(daily_cost),
-        group_id=_parse_group_id(group_id),
         room=services.fix_text(room.strip()),
         platform=services.fix_text(platform.strip()),
         node_account=services.fix_text(node_account.strip()),
@@ -373,8 +366,8 @@ def edit_account_form(
             db=db,
             account=account,
             form={},
+            error=request.query_params.get("error", ""),
             stats=services.list_stats(db),
-            groups=services.list_groups(db),
         ),
     )
 
@@ -395,9 +388,7 @@ def update_account(
     status: str = Form(STATUS_ACTIVE),
     notes: str = Form(""),
     discount_enabled: str = Form(""),
-    install_address: str = Form(""),
     daily_cost: str = Form(""),
-    group_id: str = Form(""),
     room: str = Form(""),
     platform: str = Form(""),
     node_account: str = Form(""),
@@ -405,12 +396,27 @@ def update_account(
 ):
     account = get_account_or_404(db, account_id)
     account.phone = services.fix_text(phone.strip()) or account.phone
-    # --- 宽带账号是身份标识，建好后锁定：即使有人绕过页面直接 POST 也不改 ---
+    # --- 宽带账号可改，但不能和别的账号重复（留空表示保持原值） ---
     incoming_bb = services.fix_text(broadband_account.strip())
-    if incoming_bb != account.broadband_account:
-        logger.info(
-            "忽略账号 %s 的宽带账号改动（原值 %s）", account.phone, account.broadband_account
+    if incoming_bb and incoming_bb != account.broadband_account:
+        dup = (
+            db.query(Account)
+            .filter(
+                Account.broadband_account == incoming_bb,
+                Account.id != account.id,
+            )
+            .first()
         )
+        if dup:
+            logger.info(
+                "编辑账号 %s 的宽带账号被拒：%s 已被账号 %s 占用",
+                account.phone, incoming_bb, dup.phone,
+            )
+            return RedirectResponse(
+                f"/accounts/{account_id}/edit?error=该宽带账号已存在", status_code=303
+            )
+        account.broadband_account = incoming_bb
+        logger.info("账号 %s 的宽带账号改为 %s", account.phone, incoming_bb)
     account.registration_code = services.fix_text(registration_code.strip())
     account.registrant = services.fix_text(registrant.strip())
     account.sim_user = services.fix_text(sim_user.strip())
@@ -419,15 +425,11 @@ def update_account(
     account.provider = services.fix_text(provider.strip())
     account.status = status if status in STATUS_LABELS else STATUS_ACTIVE
     account.notes = services.fix_text(notes.strip())
-    account.install_address = services.fix_text(install_address.strip())
     account.daily_cost = services.money(daily_cost)
     # --- 机房 / 节点平台 / 节点号：这三个是可以随时改的 ---
     account.room = services.fix_text(room.strip())
     account.platform = services.fix_text(platform.strip())
     account.node_account = services.fix_text(node_account.strip())
-    new_group_id = _parse_group_id(group_id)
-    if new_group_id != account.group_id:
-        account.group_id = new_group_id
 
     # --- 七折开关：只能开启，不能关闭 ---
     if account.discount_enabled:
@@ -515,7 +517,6 @@ def account_detail(
             incomes=incomes,
             today=today,
             income_total=services.account_income_on(db, account, today),
-            groups=services.list_groups(db),
             stats=services.list_stats(db),
         ),
     )
@@ -638,18 +639,6 @@ async def collection_advice(db: Session = Depends(get_db)):
     return JSONResponse({"advice": text})
 
 
-@app.post("/accounts/{account_id}/remind")
-def manual_reminder(
-    request: Request,
-    account_id: int,
-    message: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    account = get_account_or_404(db, account_id)
-    services.create_manual_reminder(db, account, services.fix_text(message.strip()))
-    return RedirectResponse(f"/accounts/{account.id}", status_code=303)
-
-
 # --------------------------------------------------------------------------
 # AI 对话
 # --------------------------------------------------------------------------
@@ -712,6 +701,7 @@ def save_ai_settings(
     ai_base_url: str = Form(""),
     ai_api_key: str = Form(""),
     ai_model: str = Form(""),
+    ai_max_tokens: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """保存 AI 配置。密钥留空表示保留原来那一项，不动它。"""
@@ -723,8 +713,9 @@ def save_ai_settings(
         # 页面不回显密钥，留空就沿用原来存的那份
         api_key = services.get_stored_setting(db, "ai_api_key")
 
-    services.save_ai_config(db, base_url, api_key, model)
-    logger.info("更新 AI 配置：base_url=%s model=%s", base_url or "(空)", model or "(空)")
+    services.save_ai_config(db, base_url, api_key, model, ai_max_tokens)
+    logger.info("更新 AI 配置：base_url=%s model=%s max_tokens=%s",
+                base_url or "(空)", model or "(空)", ai_max_tokens or "(不改)")
     return RedirectResponse("/settings?ok=AI 配置已保存，立即生效", status_code=303)
 
 
@@ -916,116 +907,6 @@ def remove_income(request: Request, income_id: int, db: Session = Depends(get_db
 
 
 # --------------------------------------------------------------------------
-# 分组
-# --------------------------------------------------------------------------
-
-@app.get("/groups", response_class=HTMLResponse)
-def groups_page(request: Request, db: Session = Depends(get_db)):
-    groups = services.list_groups(db)
-    rows = []
-    for group in groups:
-        rows.append(
-            {
-                "group": group,
-                "count": services.group_account_count(db, group.id),
-                "accounts": sorted(group.accounts, key=lambda a: a.phone),
-            }
-        )
-    return templates.TemplateResponse(
-        request,
-        "groups.html",
-        base_context(
-            request,
-            db=db,
-            rows=rows,
-            accounts=db.query(Account).order_by(Account.phone).all(),
-            stats=services.list_stats(db),
-        ),
-    )
-
-
-@app.post("/groups")
-def create_group(
-    request: Request,
-    name: str = Form(...),
-    install_location: str = Form(""),
-    manage_phone: str = Form(""),
-    manage_account: str = Form(""),
-    manage_expire_at: str = Form(""),
-    note: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    """新建分组。"""
-    group = AccountGroup(
-        name=services.fix_text(name.strip()),
-        install_location=services.fix_text(install_location.strip()),
-        manage_phone=services.fix_text(manage_phone.strip()),
-        manage_account=services.fix_text(manage_account.strip()),
-        manage_expire_at=_parse_datetime(manage_expire_at),
-        note=services.fix_text(note.strip()),
-    )
-    db.add(group)
-    db.commit()
-    logger.info("新建分组 %s", group.name)
-    return RedirectResponse("/groups", status_code=303)
-
-
-@app.post("/groups/{group_id}/edit")
-def update_group(
-    request: Request,
-    group_id: int,
-    name: str = Form(...),
-    install_location: str = Form(""),
-    manage_phone: str = Form(""),
-    manage_account: str = Form(""),
-    manage_expire_at: str = Form(""),
-    note: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    group = db.get(AccountGroup, group_id)
-    if group is None:
-        raise HTTPException(status_code=404, detail="分组不存在")
-    group.name = services.fix_text(name.strip())
-    group.install_location = services.fix_text(install_location.strip())
-    group.manage_phone = services.fix_text(manage_phone.strip())
-    group.manage_account = services.fix_text(manage_account.strip())
-    group.manage_expire_at = _parse_datetime(manage_expire_at)
-    group.note = services.fix_text(note.strip())
-    db.commit()
-    return RedirectResponse("/groups", status_code=303)
-
-
-@app.post("/groups/{group_id}/delete")
-def remove_group(request: Request, group_id: int, db: Session = Depends(get_db)):
-    group = db.get(AccountGroup, group_id)
-    if group is None:
-        raise HTTPException(status_code=404, detail="分组不存在")
-    services.delete_group(db, group)
-    return RedirectResponse("/groups", status_code=303)
-
-
-@app.post("/accounts/{account_id}/group")
-def assign_group(
-    request: Request,
-    account_id: int,
-    group_id: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    """把账号归到某个分组（留空 = 移出分组）。"""
-    account = get_account_or_404(db, account_id)
-    group_id = (group_id or "").strip()
-    if not group_id or group_id == "0":
-        account.group_id = None
-    else:
-        group = db.get(AccountGroup, int(group_id))
-        if group is None:
-            raise HTTPException(status_code=404, detail="分组不存在")
-        account.group_id = group.id
-    db.commit()
-    return RedirectResponse(f"/accounts/{account.id}", status_code=303)
-
-
-# --------------------------------------------------------------------------
 # AI 识图：从截图里读机房收益
 # --------------------------------------------------------------------------
 
@@ -1060,6 +941,14 @@ async def api_recognize(
             {"error": "视觉模型未配置，请到「设置」页填写视觉模型和密钥"}, status_code=503
         )
 
+    filename = image.filename or "shot.png"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext in ("svg", "html"):
+        # 视觉接口只认 PNG / JPEG / WEBP，SVG 是矢量格式，传过去多半被拒
+        return JSONResponse(
+            {"error": "不支持 SVG 格式的截图，请换成 PNG 或 JPG 再上传"}, status_code=400
+        )
+
     content = await image.read()
     if not content:
         return JSONResponse({"error": "图片是空的"}, status_code=400)
@@ -1068,15 +957,36 @@ async def api_recognize(
 
     try:
         items = await run_in_threadpool(
-            vision.recognize_income, content, image.filename or "shot.png", config
+            vision.recognize_income, content, filename, config
         )
     except Exception as exc:  # noqa: BLE001
+        # vision 层已经把能预料的失败（超时 / 截断 / 400 / 限流）转成中文提示，
+        # 这里兜底的异常只进服务端日志，前端只显示一句通用话，避免英文原文外泄
         logger.exception("AI 识图失败")
-        return JSONResponse({"error": str(exc)}, status_code=502)
+        message = str(exc)
+        if not message or message.isascii():
+            message = "识别失败，请查看服务端日志或稍后再试"
+        return JSONResponse({"error": message}, status_code=502)
 
     matched = services.match_recognized_items(db, items)
     logger.info("AI 识图识别到 %d 行", len(matched))
-    return JSONResponse({"items": matched, "count": len(matched)})
+    # 带上全量账号，前端「没匹配上」的行可以手动选账号
+    accounts = db.query(Account).order_by(Account.phone).all()
+    return JSONResponse(
+        {
+            "items": matched,
+            "count": len(matched),
+            "accounts": [
+                {
+                    "id": a.id,
+                    "phone": a.phone,
+                    "broadband_account": a.broadband_account or "",
+                    "node_account": a.node_account or "",
+                }
+                for a in accounts
+            ],
+        }
+    )
 
 
 @app.post("/api/recognize/apply")
@@ -1116,7 +1026,8 @@ async def api_recognize_apply(
 
         day = str(row.get("day") or "").strip()
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
-            day = date.today().strftime("%Y-%m-%d")
+            # 截图语义是「昨日收益」，没填日期默认记昨天
+            day = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
         services.upsert_income(
             db,
             int(account_id),
@@ -1139,9 +1050,10 @@ def save_vision_settings(
     vision_api_key: str = Form(""),
     vision_model: str = Form(""),
     vision_format: str = Form(""),
+    vision_timeout: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """保存视觉模型配置。密钥留空表示保留原来那一项。"""
+    """保存视觉模型配置。密钥留空表示保留原来那一项；超时留空表示不改。"""
     fmt = (vision_format or "").strip()
     if fmt and fmt not in vision.VISION_FORMAT_LABELS:
         fmt = ""
@@ -1151,8 +1063,10 @@ def save_vision_settings(
         (vision_api_key or "").strip(),
         services.fix_text(vision_model.strip()),
         fmt,
+        vision_timeout,
     )
-    logger.info("更新视觉模型配置：model=%s format=%s", vision_model or "(空)", fmt or "(空)")
+    logger.info("更新视觉模型配置：model=%s format=%s timeout=%s",
+                vision_model or "(空)", fmt or "(空)", vision_timeout or "(不改)")
     return RedirectResponse("/settings?ok=视觉模型配置已保存", status_code=303)
 
 
@@ -1163,6 +1077,7 @@ async def test_vision_settings(
     vision_api_key: str = Form(""),
     vision_model: str = Form(""),
     vision_format: str = Form(""),
+    vision_timeout: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """测试视觉接口：拿一张 1x1 的小图真发一次请求。"""
@@ -1171,6 +1086,7 @@ async def test_vision_settings(
     api_key = (vision_api_key or "").strip() or config.get("vision_api_key", "")
     model = services.fix_text(vision_model.strip()) or config.get("vision_model", "")
     fmt = (vision_format or "").strip() or config.get("vision_format", "")
+    timeout = (vision_timeout or "").strip() or config.get("vision_timeout", "")
 
     test_config = {
         "vision_base_url": base_url,
@@ -1179,6 +1095,7 @@ async def test_vision_settings(
         "vision_format": fmt,
         "ai_base_url": config.get("ai_base_url", ""),
         "ai_api_key": config.get("ai_api_key", ""),
+        "vision_timeout": timeout,
     }
     if not vision.vision_configured(test_config):
         return RedirectResponse(
@@ -1237,7 +1154,7 @@ def export_page(request: Request, db: Session = Depends(get_db)):
     files = [
         {
             "name": "台账导出",
-            "desc": "所有宽带账号：余额、累计充值、每日扣费、分组、安装地址、异常原因",
+            "desc": "所有宽带账号：余额、累计充值、每日扣费、机房、节点平台、节点号、异常原因",
             "url": f"/export/accounts.csv?d={stamp}",
             "size": db.query(Account).count(),
             "unit": "条账号",
@@ -1248,13 +1165,6 @@ def export_page(request: Request, db: Session = Depends(get_db)):
             "url": f"/export/incomes.csv?d={stamp}",
             "size": db.query(DailyIncome).count(),
             "unit": "条收入",
-        },
-        {
-            "name": "分组导出",
-            "desc": "分组名称、安装地点、管理线信息（手机号 / 宽带账号 / 到期时间）",
-            "url": f"/export/groups.csv?d={stamp}",
-            "size": db.query(AccountGroup).count(),
-            "unit": "个分组",
         },
         {
             "name": "收支流水导出",
@@ -1303,14 +1213,6 @@ def export_incomes_csv(db: Session = Depends(get_db)):
     stamp = date.today().strftime("%Y%m%d")
     return _download(
         exporting.incomes_csv(db), f"每日收入导出_{stamp}.csv", "text/csv; charset=utf-8"
-    )
-
-
-@app.get("/export/groups.csv")
-def export_groups_csv(db: Session = Depends(get_db)):
-    stamp = date.today().strftime("%Y%m%d")
-    return _download(
-        exporting.groups_csv(db), f"分组导出_{stamp}.csv", "text/csv; charset=utf-8"
     )
 
 
@@ -1403,17 +1305,6 @@ def healthz(db: Session = Depends(get_db)):
 # --------------------------------------------------------------------------
 # 工具
 # --------------------------------------------------------------------------
-
-def _parse_group_id(value: str) -> Optional[int]:
-    """表单里的分组下拉值，空或 0 表示不分组。"""
-    text = (value or "").strip()
-    if not text or text == "0":
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
-
 
 def _parse_datetime(value: str) -> datetime | None:
     value = (value or "").strip()

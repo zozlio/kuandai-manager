@@ -15,7 +15,6 @@ from .config import DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL, get_settings
 from .models import (
     ABNORMAL_REASONS,
     Account,
-    AccountGroup,
     AppSetting,
     DailyIncome,
     Reminder,
@@ -30,7 +29,6 @@ from .models import (
     TX_ADJUST,
     REMIND_UNPAID,
     REMIND_LOW_BALANCE,
-    REMIND_MANUAL,
 )
 
 CENT = Decimal("0.01")
@@ -43,9 +41,9 @@ AI_CONFIG_KEYS = ("ai_base_url", "ai_api_key", "ai_model")
 # 视觉模型（识图）配置的四个键
 VISION_CONFIG_KEYS = ("vision_base_url", "vision_api_key", "vision_model", "vision_format")
 
-# 视觉模型默认值
-DEFAULT_VISION_MODEL = "MiniMax-M3-VL-01"
-DEFAULT_VISION_FORMAT = "minimax_vl"
+# 视觉模型默认值：模型名不替用户猜（文本模型认不了图），格式用通用 OpenAI 兼容
+DEFAULT_VISION_MODEL = ""
+DEFAULT_VISION_FORMAT = "openai"
 
 # 七折
 DISCOUNT_RATE = Decimal("0.7")
@@ -196,7 +194,6 @@ def search_accounts(
             | Account.registrant.like(like)
             | Account.sim_user.like(like)
             | Account.notes.like(like)
-            | Account.install_address.like(like)
             | Account.room.like(like)
             | Account.platform.like(like)
             | Account.node_account.like(like)
@@ -430,22 +427,6 @@ def apply_transaction(
     return transaction
 
 
-def create_manual_reminder(db: Session, account: Account, message: str = "") -> Reminder:
-    """人工发起一次催缴。"""
-    flags = account_flags(account)
-    amount = flags["gap"] if flags["gap"] > 0 else flags["daily"]
-    reminder = Reminder(
-        account_id=account.id,
-        kind=REMIND_MANUAL,
-        amount=money(amount),
-        message=message or _low_balance_message(account, flags),
-        status="pending",
-    )
-    db.add(reminder)
-    db.commit()
-    return reminder
-
-
 # --------------------------------------------------------------------------
 # 统计
 # --------------------------------------------------------------------------
@@ -544,7 +525,7 @@ def get_ai_config(db: Session) -> dict:
             config[key] = ""
             config[f"{key}_source"] = ""
 
-    # 接口地址和模型名有内置默认值（MiniMax 中国版），密钥没有
+    # 接口地址和模型名有内置默认值（中性 OpenAI 兼容占位值），密钥没有
     if not config["ai_base_url"]:
         config["ai_base_url"] = DEFAULT_AI_BASE_URL
         config["ai_base_url_source"] = "default"
@@ -552,16 +533,27 @@ def get_ai_config(db: Session) -> dict:
         config["ai_model"] = DEFAULT_AI_MODEL
         config["ai_model_source"] = "default"
 
+    # 单次生成上限：页面存的值（留空 = 用默认 8192）
+    config["ai_max_tokens"] = get_stored_setting(db, "ai_max_tokens")
+
     config["has_override"] = has_override
     config["configured"] = bool(config["ai_base_url"] and config["ai_api_key"] and config["ai_model"])
     return config
 
 
-def save_ai_config(db: Session, base_url: str, api_key: str, model: str) -> dict:
-    """保存页面里填的 AI 配置。空字符串表示这一项回落到环境变量。"""
+def save_ai_config(db: Session, base_url: str, api_key: str, model: str,
+                   max_tokens: str = "") -> dict:
+    """保存页面里填的 AI 配置。空字符串表示这一项回落到环境变量 / 默认值。
+
+    max_tokens（单次生成上限）：留空表示不改，沿用原来存的或默认 8192。
+    不同端点的模型上限不同，这里只是可覆盖的设置项，不写死。
+    """
     set_stored_setting(db, "ai_base_url", (base_url or "").strip())
     set_stored_setting(db, "ai_api_key", (api_key or "").strip())
     set_stored_setting(db, "ai_model", (model or "").strip())
+    max_tokens = (max_tokens or "").strip()
+    if max_tokens:
+        set_stored_setting(db, "ai_max_tokens", max_tokens)
     db.commit()
     return get_ai_config(db)
 
@@ -590,11 +582,42 @@ def mask_api_key(api_key: str) -> str:
 # 视觉模型（识图）配置
 # --------------------------------------------------------------------------
 
+def _migrate_legacy_vision_format(db: Session) -> None:
+    """旧版默认视觉格式是 ``minimax_vl``（MiniMax 官方 multipart 写法）。
+
+    默认格式改成 OpenAI 兼容后，``config.get("vision_format") or 默认值``
+    让 DB 里已存旧值的用户继续走 multipart，打到通用端点就 415
+    （Unsupported Media Type）。这里做一次自动迁移：格式还停在
+    ``minimax_vl``、且端点（视觉专用或沿用的 AI 地址）不是 MiniMax
+    官方的，就改写成 ``openai``。MiniMax 官方端点不动，新格式不动。
+    """
+    fmt = get_stored_setting(db, "vision_format")
+    if fmt != "minimax_vl":
+        return
+    # 和 get_vision_config 同一口径：视觉专用地址优先，没填沿用 AI 的
+    # 生效地址（页面 → 环境变量 → 默认值），别只看 DB 里存没存
+    ai = get_ai_config(db)
+    base = (
+        get_stored_setting(db, "vision_base_url")
+        or ai.get("ai_base_url", "")
+    ).lower()
+    if "minimaxi" in base or "api.minimax" in base:
+        return
+    set_stored_setting(db, "vision_format", DEFAULT_VISION_FORMAT)
+    db.commit()
+    logger.info(
+        "视觉格式自动迁移：minimax_vl → openai"
+        "（当前端点 %s 不是 MiniMax 官方端点，multipart 格式会报 415）",
+        base or "(未配置)",
+    )
+
+
 def get_vision_config(db: Session) -> dict:
     """视觉模型配置。
 
     视觉接口地址和密钥留空时，直接沿用文本模型（AI）的配置，省得填两遍。
     """
+    _migrate_legacy_vision_format(db)
     ai = get_ai_config(db)
     config: dict = {}
     for key in VISION_CONFIG_KEYS:
@@ -609,26 +632,38 @@ def get_vision_config(db: Session) -> dict:
         config["vision_api_key"] = ai.get("ai_api_key", "")
         config["vision_api_key_source"] = ai.get("ai_api_key_source", "")
     if not config["vision_model"]:
-        config["vision_model"] = DEFAULT_VISION_MODEL
-        config["vision_model_source"] = "default"
+        # 没单独填视觉模型就沿用文本模型（很多端点同一个模型既支持文本也支持图文，
+        # 省得填两遍）；填了才优先用填的。
+        config["vision_model"] = ai.get("ai_model", "")
+        config["vision_model_source"] = ai.get("ai_model_source", "")
     if not config["vision_format"]:
         config["vision_format"] = DEFAULT_VISION_FORMAT
         config["vision_format_source"] = "default"
+
+    # 视觉调用要用的生成上限：页面设置里的 ai_max_tokens（没有则为空，走默认 8192）
+    config["ai_max_tokens"] = get_stored_setting(db, "ai_max_tokens")
+    # 视觉超时（秒）：页面设置优先，没有则走环境变量 / 默认 300。
+    # 用户的端点快慢不同，必须给自救旋钮（和 ai_max_tokens 同构）。
+    config["vision_timeout"] = get_stored_setting(db, "vision_timeout")
 
     config["configured"] = bool(config["vision_model"] and config["vision_api_key"])
     return config
 
 
 def save_vision_config(
-    db: Session, base_url: str, api_key: str, model: str, fmt: str
+    db: Session, base_url: str, api_key: str, model: str, fmt: str,
+    vision_timeout: str = "",
 ) -> dict:
-    """保存视觉模型配置。密钥留空表示保留原来那一项。"""
+    """保存视觉模型配置。密钥留空表示保留原来那一项；超时留空表示不改。"""
     if not api_key:
         api_key = get_stored_setting(db, "vision_api_key")
     set_stored_setting(db, "vision_base_url", (base_url or "").strip())
     set_stored_setting(db, "vision_api_key", (api_key or "").strip())
     set_stored_setting(db, "vision_model", (model or "").strip())
     set_stored_setting(db, "vision_format", (fmt or "").strip())
+    vision_timeout = (vision_timeout or "").strip()
+    if vision_timeout:
+        set_stored_setting(db, "vision_timeout", vision_timeout)
     db.commit()
     return get_vision_config(db)
 
@@ -644,11 +679,46 @@ def _norm(value) -> str:
 def match_recognized_items(db: Session, items: list[dict]) -> list[dict]:
     """把识别出来的每一行跟台账对上。
 
-    第一级用「宽带账号」找账号（手机号 / 宽带账号 / 注册码），
-    第二级核对「节点号」跟这个账号登记的是不是同一个。
-    对不上的行原样返回，标记清楚，让人来决定怎么处置。
+    识别出的行里「节点号」是第一主键（真实截图里基本只有它）：
+    - 节点号在台账里**唯一命中** → 直接落账号（账号与节点号 1:1）；
+    - 节点号**命中多条**（同一节点号登记在多个账号上，数据本身有问题）
+      → 不静默选一条，把候选全部列出来让人挑；
+    - 节点号对不上 → 再按「宽带账号 / 手机号 / 注册码」找；
+    - 都对不上 → 标记 no_account，让人在确认表里手动选账号。
+
+    落上账号后再核对节点号跟台账登记的是不是同一个，对不上的标出来提醒。
     """
     accounts = db.query(Account).all()
+
+    # 节点号 → 登记了它的账号列表（node_account 没有 UNIQUE 约束，可能一对多）
+    by_node: dict = {}
+    for account in accounts:
+        node_key = _norm(account.node_account)
+        if node_key:
+            by_node.setdefault(node_key, []).append(account)
+
+    def _find_by_broadband(broadband: str, digits: list):
+        """老的按宽带账号 / 手机号 / 注册码找，返回 (账号, 原因)。"""
+        if broadband:
+            for digit in digits:
+                hit = next((a for a in accounts if _norm(a.phone).endswith(digit)), None)
+                if hit is not None:
+                    return hit, "手机号"
+            for candidate in accounts:
+                if _norm(candidate.broadband_account) == broadband:
+                    return candidate, "宽带账号"
+            for candidate in accounts:
+                code = _norm(candidate.registration_code)
+                if code and (code in broadband or broadband in code):
+                    return candidate, "注册码"
+            for candidate in accounts:
+                code = _norm(candidate.broadband_account)
+                if code and (code in broadband or broadband in code):
+                    return candidate, "宽带账号（近似）"
+            for candidate in accounts:
+                if _norm(candidate.phone) and _norm(candidate.phone) in broadband:
+                    return candidate, "手机号（近似）"
+        return None, ""
 
     result = []
     for item in items:
@@ -658,41 +728,29 @@ def match_recognized_items(db: Session, items: list[dict]) -> list[dict]:
 
         account: Account | None = None
         account_reason = ""
+        candidates: list = []
 
-        digits = re.findall(r"\d{11}", broadband)
-        for digit in digits:
-            account = next((a for a in accounts if _norm(a.phone).endswith(digit)), None)
-            if account is not None:
-                account_reason = "手机号"
-                break
+        # 第一级：节点号（截图主键）
+        node_hits = by_node.get(node_text, []) if node_text else []
+        if len(node_hits) == 1:
+            account, account_reason = node_hits[0], "节点号"
+        elif len(node_hits) > 1:
+            # 同一节点号挂在多个账号上：如果截图里还有宽带账号且正好是其中之一，
+            # 用两个键都命中来定案；否则全列出来让人挑，绝不静默选一条。
+            hit2 = _find_by_broadband(broadband, re.findall(r"\d{11}", broadband))
+            if hit2[0] is not None and hit2[0] in node_hits:
+                account, account_reason = hit2[0], "节点号＋宽带账号"
+            else:
+                candidates = node_hits
+                account_reason = "节点号对应多个账号"
 
-        if account is None and broadband:
-            for candidate in accounts:
-                if _norm(candidate.broadband_account) == broadband:
-                    account, account_reason = candidate, "宽带账号"
-                    break
+        # 第二级：截图里带宽带账号信息时按老逻辑找
+        if account is None and not candidates:
+            account, account_reason = _find_by_broadband(
+                broadband, re.findall(r"\d{11}", broadband)
+            )
 
-        if account is None and broadband:
-            for candidate in accounts:
-                code = _norm(candidate.registration_code)
-                if code and (code in broadband or broadband in code):
-                    account, account_reason = candidate, "注册码"
-                    break
-
-        if account is None and broadband:
-            for candidate in accounts:
-                code = _norm(candidate.broadband_account)
-                if code and (code in broadband or broadband in code):
-                    account, account_reason = candidate, "宽带账号（近似）"
-                    break
-
-        if account is None and digits:
-            for candidate in accounts:
-                if _norm(candidate.phone) and _norm(candidate.phone) in broadband:
-                    account, account_reason = candidate, "手机号（近似）"
-                    break
-
-        # 第二级：核对节点号。账号与节点号一一对应，对不上要提醒人确认。
+        # 第三级：核对节点号跟台账登记的是不是同一个
         node_reason = ""
         if account is not None:
             saved_node = _norm(account.node_account)
@@ -706,7 +764,9 @@ def match_recognized_items(db: Session, items: list[dict]) -> list[dict]:
             elif node_text and not saved_node:
                 node_reason = "账号还没登记节点号"
 
-        if account is None:
+        if candidates:
+            status = "multi_candidate"
+        elif account is None:
             status = "no_account"
         elif node_reason == "节点号不一致":
             status = "no_node"
@@ -723,6 +783,15 @@ def match_recognized_items(db: Session, items: list[dict]) -> list[dict]:
                 "node_account": str(item.get("node_account") or item.get("node") or ""),
                 "saved_node_account": account.node_account if account else "",
                 "node_reason": node_reason,
+                "candidates": [
+                    {
+                        "id": c.id,
+                        "phone": c.phone,
+                        "broadband_account": c.broadband_account,
+                        "node_account": c.node_account or "",
+                    }
+                    for c in candidates
+                ],
             }
         )
         result.append(row)
@@ -796,6 +865,16 @@ def bar_chart_svg(
             parts.append(
                 f'<text x="{x + bar_w / 2:.1f}" y="{height - 8}" class="chart-axis" '
                 f'text-anchor="middle">{row["day"][5:]}</text>'
+            )
+            # 柱顶数值标签：和 X 轴日期同频抽样（7 天全标，14/30 天抽稀），
+            # 永远放在柱顶上方 4px，柱再矮也不压进柱子里；
+            # 最高的柱子（y=pad_t）标签落在图内最顶上，不超出 viewBox。
+            # 金额走 |money 同一口径（千分位 + 两位小数），和柱高用同一份数据。
+            value_y = max(y - 4, 9)
+            parts.append(
+                f'<text x="{x + bar_w / 2:.1f}" y="{value_y:.1f}" class="chart-value" '
+                f'style="fill:var(--brand);font-size:9px" '
+                f'text-anchor="middle">{amount:,.2f}</text>'
             )
 
     parts.append(
@@ -879,26 +958,6 @@ def restore_account(db: Session, account: Account) -> Account:
     db.commit()
     logger.info("账号 %s 恢复正常", account.phone)
     return account
-
-
-# --------------------------------------------------------------------------
-# 分组
-# --------------------------------------------------------------------------
-
-def list_groups(db: Session) -> list[AccountGroup]:
-    return db.query(AccountGroup).order_by(AccountGroup.name, AccountGroup.id).all()
-
-
-def group_account_count(db: Session, group_id: int) -> int:
-    return db.query(Account).filter(Account.group_id == group_id).count()
-
-
-def delete_group(db: Session, group: AccountGroup) -> None:
-    """删分组时，组里的账号退回「未分组」，不会被一起删掉。"""
-    for account in group.accounts:
-        account.group_id = None
-    db.delete(group)
-    db.commit()
 
 
 # --------------------------------------------------------------------------

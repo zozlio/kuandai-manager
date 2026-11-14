@@ -29,6 +29,7 @@ from .models import (
 )
 from .services import effective_monthly_fee, money
 
+# 导出时统一的时间格式
 DATETIME_FMT = "%Y-%m-%d %H:%M"
 DATE_FMT = "%Y-%m-%d"
 
@@ -48,19 +49,27 @@ def _fmt_date(value) -> str:
 
 
 def _money(value) -> str:
+    """金额统一两位小数，不带货币符号，方便 Excel 当数字算。"""
     return f"{money(value):.2f}"
 
 
 def to_csv(header: list[str], rows: Iterable[list]) -> str:
+    """生成带 BOM 的 CSV 文本。"""
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\r\n")
     writer.writerow(header)
     for row in rows:
         writer.writerow(row)
-    return "\ufeff" + buf.getvalue()
+    return "﻿" + buf.getvalue()
+
+
+# --------------------------------------------------------------------------
+# 各张表的 CSV
+# --------------------------------------------------------------------------
 
 
 def accounts_csv(db: Session) -> str:
+    """台账导出。带每日扣费和余额，方便对账。"""
     header = [
         "手机号",
         "宽带账号",
@@ -121,6 +130,7 @@ def accounts_csv(db: Session) -> str:
 
 
 def incomes_csv(db: Session) -> str:
+    """每日收入导出。"""
     header = [
         "日期",
         "手机号",
@@ -160,7 +170,9 @@ def transactions_csv(db: Session) -> str:
             [
                 _fmt_dt(tx.created_at),
                 account.phone if account else "",
-                {"charge": "扣费", "recharge": "充值", "adjust": "调整"}.get(tx.kind, tx.kind),
+                {"charge": "扣费", "recharge": "充值", "adjust": "调整"}.get(
+                    tx.kind, tx.kind
+                ),
                 _money(tx.amount),
                 tx.period,
                 tx.note,
@@ -169,7 +181,13 @@ def transactions_csv(db: Session) -> str:
     return to_csv(header, rows)
 
 
+# --------------------------------------------------------------------------
+# 全量备份
+# --------------------------------------------------------------------------
+
+
 def _dump_model_rows(db: Session, model) -> list[dict]:
+    """把一张表转成可 JSON 序列化的字典列表。"""
     rows = []
     for obj in db.query(model).all():
         row = {}
@@ -189,6 +207,11 @@ def _dump_model_rows(db: Session, model) -> list[dict]:
 
 
 def backup_json(db: Session) -> str:
+    """全量备份：所有表的数据 + 导出时间。
+
+    配合 scripts/restore_backup.py 可以把整个系统还原到备份时的状态。
+    用户的密码哈希也在里面（不会明文），所以这个文件要当敏感文件保管。
+    """
     payload = {
         "format": "kuandai-manager-backup",
         "version": 1,

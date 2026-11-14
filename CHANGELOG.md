@@ -62,6 +62,44 @@
 
 - 全量回归从 **69 → 82 项全绿**（分组下线 69→67，AI 链路修复新增，安装地址 / 催缴移除调整，宽带可编辑新增用例）。
 
+### 升级步骤（v1.1.0 → v1.2.0）
+
+**没有数据迁移，不用跑任何脚本**：这一版只改界面和逻辑，数据库**表和字段一个没删**（分组、安装地址的表/列是刻意的「断连接、不删数据」）。
+
+1. **先备份数据目录**（习惯动作，出问题能回滚）：
+   ```bash
+   cp -a /vol1/1000/docker/kuandai-data /vol1/1000/docker/kuandai-data-backup
+   ```
+2. 拿到新镜像（二选一）：
+   ```bash
+   # 方式一：拉 GitHub 上构建好的镜像
+   docker pull ghcr.io/zozlio/kuandai-manager:latest
+   # 方式二：在源码目录自己构建
+   docker build -t kuandai-manager:latest .
+   ```
+3. 停旧容器、删旧容器、起新容器（**数据目录原样挂回去，不要动里面的文件**）：
+   ```bash
+   docker stop kuandai-manager
+   docker rm kuandai-manager
+   docker run -d --name kuandai-manager --restart unless-stopped \
+     -p 18080:8080 \
+     -v /vol1/1000/docker/kuandai-data:/data \
+     -e TZ=Asia/Shanghai \
+     kuandai-manager:latest
+   ```
+4. 打开 `http://<NAS_IP>:18080` 确认：台账条目数、余额、流水、催缴提醒都和升级前一致；侧边栏的「分组」入口消失属正常。
+
+### 升级后会看到的变化（自查清单）
+
+| 现象 | 是否正常 |
+|---|---|
+| 侧边栏「分组」入口消失 | ✅ 预期（功能下线，数据还在库里） |
+| 账号列表 / 详情 / 表单里没有「安装地址」 | ✅ 预期（字段还在库里，只是不展示了） |
+| 账号详情页没有「发起催缴」按钮 | ✅ 预期（自动催缴仍在跑） |
+| 编辑账号时宽带账号可以改了 | ✅ 预期（新增了唯一性校验） |
+| 首页样式变成深色霓虹 + 玻璃卡片 | ✅ 预期（v2 界面） |
+| 台账条目数、余额、流水、提醒条数变化 | ⚠️ 要查，正常情况应完全一致 |
+
 ---
 
 ## v1.1.0 — 2026-11-08

@@ -65,8 +65,14 @@
     <table class="table">
       <thead>
         <tr>
-          <th>采用</th><th>宽带账号</th><th>匹配到的宽带</th><th>节点号</th>
-          <th>核对结果</th><th class="num">每天收入</th><th>日期</th><th>原文</th>
+          <th>采用</th>
+          <th>宽带账号</th>
+          <th>匹配到的宽带</th>
+          <th>节点号</th>
+          <th>核对结果</th>
+          <th class="num">每天收入</th>
+          <th>日期</th>
+          <th>原文</th>
         </tr>
       </thead>
       <tbody id="resultBody"></tbody>
@@ -95,7 +101,7 @@
 
   let pickedFile = null;
   let rows = [];
-  let allAccounts = [];
+  let allAccounts = [];  // 台账全量账号，没匹配上的行用来手动选
 
   function setFile(file) {
     if (!file) return;
@@ -119,6 +125,7 @@
   });
 
   fileInput.addEventListener('change', (e) => setFile(e.target.files[0]));
+
   ['dragenter', 'dragover'].forEach(evt =>
     dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add('dragging'); }));
   ['dragleave', 'drop'].forEach(evt =>
@@ -127,17 +134,22 @@
 
   function escapeHtml(text) {
     return String(text == null ? '' : text)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function accountOptions(selectedId) {
+    // 每行一个「选账号」下拉：台账全量账号，当前选中项置顶
     const opts = [];
     if (selectedId) {
       const sel = allAccounts.find(a => a.id === selectedId);
-      if (sel) opts.push(`<option value="${sel.id}" selected>${escapeHtml(sel.phone)}${sel.broadband_account ? ' · ' + escapeHtml(sel.broadband_account) : ''}${sel.node_account ? ' · ' + escapeHtml(sel.node_account) : ''}</option>`);
+      if (sel) opts.push(
+        `<option value="${sel.id}" selected>${escapeHtml(sel.phone)}${sel.broadband_account ? ' · ' + escapeHtml(sel.broadband_account) : ''}${sel.node_account ? ' · ' + escapeHtml(sel.node_account) : ''}</option>`);
     }
-    allAccounts.filter(a => a.id !== selectedId).forEach(a => opts.push(
-      `<option value="${a.id}">${escapeHtml(a.phone)}${a.broadband_account ? ' · ' + escapeHtml(a.broadband_account) : ''}${a.node_account ? ' · ' + escapeHtml(a.node_account) : ''}</option>`));
+    allAccounts
+      .filter(a => a.id !== selectedId)
+      .forEach(a => opts.push(
+        `<option value="${a.id}">${escapeHtml(a.phone)}${a.broadband_account ? ' · ' + escapeHtml(a.broadband_account) : ''}${a.node_account ? ' · ' + escapeHtml(a.node_account) : ''}</option>`));
     return opts.join('');
   }
 
@@ -157,29 +169,40 @@
           <td><input type="checkbox" data-idx="${i}" data-field="use" ${row.use ? 'checked' : ''}></td>
           <td class="mono">${escapeHtml(row.broadband) || '—'}</td>
           <td>
-            <select class="cell-input" data-idx="${i}" data-field="account_id">${accountOptions(row.account_id)}</select>
+            <select class="cell-input" data-idx="${i}" data-field="account_id">
+              ${accountOptions(row.account_id)}
+            </select>
             <div class="muted small">${escapeHtml(statusNote[row.status] || row.account_reason || '')}</div>
           </td>
           <td class="mono">${escapeHtml(row.node_account || row.node) || '—'}</td>
           <td>
             ${row.node_reason
-              ? `<span class="tag ${row.node_reason === '节点号不一致' ? 'danger' : 'ok'}">${escapeHtml(row.node_reason)}</span>${row.saved_node_account ? `<div class="muted small">台账登记：${escapeHtml(row.saved_node_account)}</div>` : ''}`
+              ? `<span class="tag ${row.node_reason === '节点号不一致' ? 'danger' : 'ok'}">${escapeHtml(row.node_reason)}</span>
+                 ${row.saved_node_account
+                   ? `<div class="muted small">台账登记：${escapeHtml(row.saved_node_account)}</div>`
+                   : ''}`
               : '<span class="muted">—</span>'}
           </td>
-          <td class="num"><input class="cell-input" type="number" step="0.01" data-idx="${i}" data-field="amount" value="${row.amount}"></td>
-          <td><input class="cell-input" type="date" data-idx="${i}" data-field="day" value="${row.day}"></td>
+          <td class="num"><input class="cell-input" type="number" step="0.01"
+                 data-idx="${i}" data-field="amount" value="${row.amount}"></td>
+          <td><input class="cell-input" type="date" data-idx="${i}" data-field="day"
+                 value="${row.day}"></td>
           <td class="muted small">${escapeHtml(row.raw)}</td>
         </tr>`;
     }).join('');
-    resultCount.textContent = rows.length + ' 行，勾选 ' + rows.filter(r => r.use).length + ' 行';
+
+    resultCount.textContent = rows.length + ' 行，勾选 ' +
+      rows.filter(r => r.use).length + ' 行';
     resultPanel.hidden = false;
+
     resultBody.querySelectorAll('input[data-idx], select[data-idx]').forEach((el) => {
       el.addEventListener('change', () => {
         const i = Number(el.dataset.idx);
         if (el.dataset.field === 'use') rows[i].use = el.checked;
         else if (el.dataset.field === 'account_id') rows[i].account_id = Number(el.value) || null;
         else rows[i][el.dataset.field] = el.value;
-        resultCount.textContent = rows.length + ' 行，勾选 ' + rows.filter(r => r.use).length + ' 行';
+        resultCount.textContent = rows.length + ' 行，勾选 ' +
+          rows.filter(r => r.use).length + ' 行';
       });
     });
   }
@@ -188,32 +211,56 @@
     if (!pickedFile) return;
     recognizeBtn.disabled = true;
     statusEl.textContent = '正在识别，免费线路约需 1–2 分钟，慢的端点可能更久，别关页面…';
+
     const fd = new FormData();
     fd.append('image', pickedFile);
     try {
       const res = await fetch('/api/recognize', { method: 'POST', body: fd });
       const data = await res.json();
-      if (!res.ok || data.error) { statusEl.textContent = ''; alert(data.error || '识别失败'); recognizeBtn.disabled = false; return; }
-      if (!data.items || !data.items.length) { statusEl.textContent = '没认出内容，换个清楚点的截图试试'; recognizeBtn.disabled = false; return; }
+      if (!res.ok || data.error) {
+        statusEl.textContent = '';
+        alert(data.error || '识别失败');
+        recognizeBtn.disabled = false;
+        return;
+      }
+      if (!data.items || !data.items.length) {
+        statusEl.textContent = '没认出内容，换个清楚点的截图试试';
+        recognizeBtn.disabled = false;
+        return;
+      }
       statusEl.textContent = '识别完成';
       recognizeBtn.disabled = false;
       renderRows(data.items, data.accounts);
     } catch (err) {
-      statusEl.textContent = ''; alert('识别失败：' + err); recognizeBtn.disabled = false;
+      statusEl.textContent = '';
+      alert('识别失败：' + err);
+      recognizeBtn.disabled = false;
     }
   });
 
   applyBtn.addEventListener('click', async () => {
     const used = rows.filter(r => r.use);
     if (!used.length) { alert('先勾几行再回填'); return; }
-    const payload = used.map(r => ({ use: r.use, node_account: r.node_account || r.node, account_id: r.account_id, node: r.node, platform: r.platform, amount: r.amount, day: r.day }));
+    const payload = used.map(r => ({
+      use: r.use,
+      node_account: r.node_account || r.node,
+      account_id: r.account_id,
+      node: r.node,
+      platform: r.platform,
+      amount: r.amount,
+      day: r.day,
+    }));
     const fd = new FormData();
     fd.append('payload', JSON.stringify(payload));
     const res = await fetch('/api/recognize/apply', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok || data.error) { alert(data.error || '回填失败'); return; }
-    await showModal({ title: '回填完成', okText: '知道了', hideCancel: true,
-      body: `<p class="modal-text">已经写入 ${data.saved} 条收入${data.updated_nodes ? `，更新了 ${data.updated_nodes} 个节点号` : ''}。</p>` });
+    await showModal({
+      title: '回填完成',
+      okText: '知道了', hideCancel: true,
+      body: `<p class="modal-text">已经写入 ${data.saved} 条收入`
+        + (data.updated_nodes ? `，更新了 ${data.updated_nodes} 个节点号` : '') + '。</p>',
+    });
     location.reload();
   });
 </script>

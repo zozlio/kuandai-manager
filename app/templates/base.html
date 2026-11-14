@@ -18,40 +18,110 @@
   <aside class="sidebar">
     <a class="brand" href="/">
       <span class="logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
         </svg>
       </span>
-      <span class="brand-text"><strong>宽带账号台账</strong><small>kuandai-manager</small></span>
+      <span class="brand-text">
+        <strong>宽带账号台账</strong>
+        <small>kuandai-manager</small>
+      </span>
     </a>
+
     <nav class="nav">
-      <a href="/" class="{{ 'active' if request.url.path == '/' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg><span>台账</span></a>
-      <a href="/rooms" class="{{ 'active' if request.url.path.startswith('/rooms') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg><span>机房</span></a>
-      <a href="/recognize" class="{{ 'active' if request.url.path.startswith('/recognize') or request.url.path.startswith('/chat') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4l1.7 4.6 4.6 1.7-4.6 1.7L11 16.6l-1.7-4.6-4.6-1.7 4.6-1.7z"/><path d="M18.5 15l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/></svg><span>AI</span></a>
-      <a href="/reminders" class="{{ 'active' if request.url.path.startswith('/reminders') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>提醒</span>{% if stats and stats.pending_reminders %}<span class="pill">{{ stats.pending_reminders }}</span>{% endif %}</a>
-      <a href="/export" class="{{ 'active' if request.url.path.startswith('/export') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg><span>导出</span></a>
-      <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.17.63.72 1.09 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>设置</span></a>
+      <a href="/" class="{{ 'active' if request.url.path == '/' }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+        </svg>
+        <span>台账</span>
+      </a>
+      <a href="/rooms" class="{{ 'active' if request.url.path.startswith('/rooms') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/>
+          <path d="M6 7h.01M6 17h.01"/>
+        </svg>
+        <span>机房</span>
+      </a>
+      <a href="/recognize" class="{{ 'active' if request.url.path.startswith('/recognize') or request.url.path.startswith('/chat') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 4l1.7 4.6 4.6 1.7-4.6 1.7L11 16.6l-1.7-4.6-4.6-1.7 4.6-1.7z"/>
+          <path d="M18.5 15l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>
+        </svg>
+        <span>AI</span>
+      </a>
+      <a href="/reminders" class="{{ 'active' if request.url.path.startswith('/reminders') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span>提醒</span>
+        {% if stats and stats.pending_reminders %}
+        <span class="pill">{{ stats.pending_reminders }}</span>
+        {% endif %}
+      </a>
+<a href="/export" class="{{ 'active' if request.url.path.startswith('/export') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+        </svg>
+        <span>导出</span>
+      </a>
+      <a href="/settings" class="{{ 'active' if request.url.path.startswith('/settings') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.17.63.72 1.09 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>设置</span>
+      </a>
     </nav>
+
     <div class="side-foot">
-      <a class="ai-state {{ 'on' if ai.configured else 'off' }}" href="/settings"><span class="dot"></span><div><strong>{{ 'AI 已接入' if ai.configured else 'AI 未配置' }}</strong><small>{{ ai.model if ai.configured else '到「设置」页填一下就能用' }}</small></div></a>
+      <a class="ai-state {{ 'on' if ai.configured else 'off' }}" href="/settings">
+        <span class="dot"></span>
+        <div>
+          <strong>{{ 'AI 已接入' if ai.configured else 'AI 未配置' }}</strong>
+          <small>{{ ai.model if ai.configured else '到「设置」页填一下就能用' }}</small>
+        </div>
+      </a>
       {% if user %}
-      <div class="user-box"><div class="user-name" title="{{ user.username }}">{{ user.username }}</div><form method="post" action="/logout"><button class="btn ghost tiny" type="submit">退出</button></form></div>
+      <div class="user-box">
+        <div class="user-name" title="{{ user.username }}">{{ user.username }}</div>
+        <form method="post" action="/logout">
+          <button class="btn ghost tiny" type="submit">退出</button>
+        </form>
+      </div>
       {% endif %}
     </div>
   </aside>
 
   <main class="main">
-    <div class="wrap">{% block content %}{% endblock %}</div>
-    <footer class="foot">kuandai-manager v{{ APP_VERSION }} · 数据保存在本地数据目录</footer>
+    <div class="wrap">
+      {% block content %}{% endblock %}
+    </div>
+    <footer class="foot">
+      kuandai-manager v{{ APP_VERSION }} · 数据保存在本地数据目录
+    </footer>
   </main>
 </div>
 
+<!-- ================= 确认 / 输入弹窗 ================= -->
 <div class="modal-backdrop" id="modalBackdrop" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-head"><h3 id="modalTitle"></h3><button type="button" class="modal-x" id="modalX" aria-label="关闭">&times;</button></div>
+    <div class="modal-head">
+      <h3 id="modalTitle"></h3>
+      <button type="button" class="modal-x" id="modalX" aria-label="关闭">&times;</button>
+    </div>
     <div class="modal-body" id="modalBody"></div>
-    <div class="modal-foot"><button type="button" class="btn ghost" id="modalCancel">取消</button><button type="button" class="btn primary" id="modalOk">确认</button></div>
+    <div class="modal-foot">
+      <button type="button" class="btn ghost" id="modalCancel">取消</button>
+      <button type="button" class="btn primary" id="modalOk">确认</button>
+    </div>
   </div>
 </div>
 
@@ -63,25 +133,67 @@
   const cancelBtn = document.getElementById('modalCancel');
   const closeBtn = document.getElementById('modalX');
   let resolver = null;
+
   window.ABNORMAL_REASONS = {{ ABNORMAL_REASONS|tojson }};
+
+  /**
+   * 一键复制。优先用剪贴板 API，老浏览器退回 execCommand。
+   * 复制成功按钮上会短暂变成「已复制」，2 秒后还原。
+   */
   window.copyText = async function (text, btn) {
     if (!text) return;
     const value = String(text);
     let ok = false;
     try {
-      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(value); ok = true; }
-      else { const ta = document.createElement('textarea'); ta.value = value; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); document.body.removeChild(ta); }
-    } catch (e) { ok = false; }
-    if (btn) { const old = btn.getAttribute('title') || ''; btn.classList.add(ok ? 'copied' : 'copy-failed'); btn.setAttribute('title', ok ? '已复制' : '复制失败，请手动选中'); setTimeout(() => { btn.classList.remove('copied', 'copy-failed'); btn.setAttribute('title', old); }, 2000); }
-    if (!ok) { window.prompt('复制失败，请手动复制：', value); }
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        ok = true;
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    } catch (e) {
+      ok = false;
+    }
+    if (btn) {
+      const old = btn.getAttribute('title') || '';
+      btn.classList.add(ok ? 'copied' : 'copy-failed');
+      btn.setAttribute('title', ok ? '已复制' : '复制失败，请手动选中');
+      setTimeout(() => {
+        btn.classList.remove('copied', 'copy-failed');
+        btn.setAttribute('title', old);
+      }, 2000);
+    }
+    if (!ok) {
+      window.prompt('复制失败，请手动复制：', value);
+    }
   };
-  function hide() { backdrop.hidden = true; document.body.classList.remove('modal-open'); }
-  function cancel() { hide(); if (resolver) { const r = resolver; resolver = null; r(null); } }
+
+  function hide() {
+    backdrop.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+  function cancel() {
+    hide();
+    if (resolver) { const r = resolver; resolver = null; r(null); }
+  }
   window.closeModal = cancel;
   closeBtn.addEventListener('click', cancel);
   cancelBtn.addEventListener('click', cancel);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cancel(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !backdrop.hidden) cancel(); });
+
+  /**
+   * 通用弹窗。onOk 返回 false 表示校验不通过，弹窗保持打开；
+   * 返回其它值则作为最终结果交给调用方（取消时为 null）。
+   */
   window.showModal = function (opts) {
     const o = opts || {};
     document.getElementById('modalTitle').textContent = o.title || '提示';
@@ -92,30 +204,233 @@
     if (o.onMount) o.onMount();
     backdrop.hidden = false;
     document.body.classList.add('modal-open');
+
     return new Promise((resolve) => {
       resolver = resolve;
       okBtn.onclick = async () => {
-        if (o.onOk) { const r = await o.onOk(); if (r === false) return; hide(); resolver = null; resolve(r === undefined ? true : r); return; }
-        hide(); resolver = null; resolve(true);
+        if (o.onOk) {
+          const r = await o.onOk();
+          if (r === false) return;
+          hide(); resolver = null;
+          resolve(r === undefined ? true : r);
+          return;
+        }
+        hide(); resolver = null;
+        resolve(true);
       };
     });
   };
+
+  // 数字滚动：KPI 从 0 滚到目标值，800ms；prefers-reduced-motion 时直接落值
   (function () {
     const els = document.querySelectorAll('.kpi-value[data-count], .stat-value[data-count]');
     if (!els.length) return;
     const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const DUR = 1100;
-    els.forEach((el) => { const text = el.textContent; const m = text.match(/^([^0-9]*)([\d,]+(?:\.\d+)?)(.*)$/); if (!m || reduce) return; const prefix = m[1], target = parseFloat(m[2].replace(/,/g, '')), suffix = m[3]; if (!isFinite(target)) return; const fmt = (v) => prefix + v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix; const start = performance.now(); const tick = (now) => { const t = Math.min((now - start) / DUR, 1); const eased = 1 - Math.pow(1 - t, 5); el.textContent = fmt(target * eased); if (t < 1) requestAnimationFrame(tick); else { el.textContent = text; el.style.transition="transform .1s"; el.style.transform="scale(1.02)"; setTimeout(()=>el.style.transform="", 100); } }; el.textContent = fmt(0); requestAnimationFrame(tick); });
+    els.forEach((el) => {
+      const text = el.textContent;
+      const m = text.match(/^([^0-9]*)([\d,]+(?:\.\d+)?)(.*)$/);
+      if (!m || reduce) return;
+      const prefix = m[1], target = parseFloat(m[2].replace(/,/g, '')), suffix = m[3];
+      if (!isFinite(target)) return;
+      const fmt = (v) => prefix + v.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
+      const start = performance.now();
+      const tick = (now) => {
+        const t = Math.min((now - start) / DUR, 1);
+        const eased = 1 - Math.pow(1 - t, 5);  // ease-out cubic
+        el.textContent = fmt(target * eased);
+        if (t < 1) requestAnimationFrame(tick);
+        else { el.textContent = text; el.style.transition="transform .1s"; el.style.transform="scale(1.02)"; setTimeout(()=>el.style.transform="", 100); }
+      };
+      el.textContent = fmt(0);
+      requestAnimationFrame(tick);
+    });
   })();
-  window.showFieldError = function (msg) { let el = document.querySelector('#modalBody .modal-error'); if (!el) { el = document.createElement('div'); el.className = 'modal-error'; document.getElementById('modalBody').prepend(el); } el.textContent = msg; };
-  window.rechargeAccount = async function (id, phone, balance, totalRecharged, daily) { const bal = Number(balance) || 0; const total = Number(totalRecharged) || 0; const result = await showModal({ title: '给 ' + phone + ' 充值', okText: '确认充值', body: '<div class="modal-field"><label>充值金额（元）</label><input id="rechargeAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00"><div class="quick-amounts"><button type="button" class="btn tiny ghost" data-amt="100">+100</button><button type="button" class="btn tiny ghost" data-amt="200">+200</button><button type="button" class="btn tiny ghost" data-amt="500">+500</button></div></div><div class="modal-preview"><div><span>当前余额</span><strong>¥${bal.toFixed(2)}</strong></div><div><span>充值后余额</span><strong id="mNewBalance">¥${bal.toFixed(2)}</strong></div><div><span>累计充值</span><strong>¥${total.toFixed(2)}</strong></div><div><span>每日扣款</span><strong>¥${(Number(daily) || 0).toFixed(2)}</strong></div></div>', onMount: () => { const input = document.getElementById('rechargeAmount'); const upd = () => { const amt = parseFloat(input.value) || 0; document.getElementById('mNewBalance').textContent = '¥' + (bal + amt).toFixed(2); }; input.addEventListener('input', upd); document.querySelectorAll('.quick-amounts [data-amt]').forEach((btn) => { btn.addEventListener('click', () => { const cur = parseFloat(input.value) || 0; input.value = (cur + parseFloat(btn.dataset.amt)).toFixed(2); upd(); input.focus(); }); }); input.focus(); }, onOk: () => { const amt = parseFloat(document.getElementById('rechargeAmount').value); if (!amt || amt <= 0) { showFieldError('请输入大于 0 的充值金额'); return false; } return amt; } }); if (!result) return; const fd = new FormData(); fd.append('amount', result); fd.append('note', '页面充值'); const res = await fetch('/api/accounts/' + id + '/recharge', { method: 'POST', body: fd }); const data = await res.json(); if (!res.ok || data.error) { await showModal({ title: '充值失败', okText: '知道了', hideCancel: true, body: '<p class="modal-text modal-error">' + (data.error || '未知错误') + '</p>' }); return; } await showModal({ title: '充值成功', okText: '知道了', hideCancel: true, body: '<div class="modal-preview"><div><span>本次充值</span><strong>¥' + data.amount.toFixed(2) + '</strong></div><div><span>剩余余额</span><strong>¥' + data.balance.toFixed(2) + '</strong></div><div><span>累计充值</span><strong class="hl">¥' + data.total_recharged.toFixed(2) + '</strong></div></div>' }); location.reload(); };
-  window.deleteAccount = async function (id) { const ok = await showModal({ title: '删除账号', okText: '确认删除', okClass: 'danger', body: '<p class="modal-text">确定删除这条记录？相关的流水和提醒会一并删除，且无法恢复。</p>' }); if (!ok) return; const res = await fetch('/accounts/' + id + '/delete', { method: 'POST' }); if (res.ok || res.redirected) location.href = '/'; else alert('删除失败'); };
-  window.markAbnormal = async function (id, phone) { const reasons = window.ABNORMAL_REASONS || {}; const options = Object.entries(reasons).map(([key, label], i) => '<label class="radio-row"><input type="radio" name="abnReason" value="' + key + '" ' + (i === 0 ? 'checked' : '') + '><span>' + label + '</span></label>').join(''); const result = await showModal({ title: '标记异常：' + phone, okText: '标记为异常', okClass: 'danger', body: '<p class="modal-text">选一条异常原因，标记后这条线会移到「异常账号」页。</p><div class="radio-list">' + options + '</div><div class="modal-field"><label>补充说明（可留空）</label><input id="abnNote" type="text" placeholder="例如：机房断电两小时"></div>', onOk: () => { const picked = document.querySelector('#modalBody input[name="abnReason"]:checked'); if (!picked) { showFieldError('请选一个异常原因'); return false; } const note = document.getElementById('abnNote'); return { reason: picked.value, note: note ? note.value : '' }; } }); if (!result) return; const fd = new FormData(); fd.append('reason', result.reason); fd.append('note', result.note); const res = await fetch('/accounts/' + id + '/abnormal', { method: 'POST', body: fd }); const data = await res.json(); if (!res.ok || data.error) { alert(data.error || '标记失败'); return; } location.reload(); };
-  window.restoreAccount = async function (id, phone) { const ok = await showModal({ title: '恢复正常', okText: '确认恢复', body: '<p class="modal-text">确定把 ' + phone + ' 移回「正常账号」？异常原因会被清掉。</p>' }); if (!ok) return; const res = await fetch('/accounts/' + id + '/restore', { method: 'POST' }); const data = await res.json(); if (!res.ok || data.error) { alert(data.error || '恢复失败'); return; } location.reload(); };
-  document.querySelectorAll('form[data-confirm]').forEach((form) => { form.addEventListener('submit', async (e) => { if (form.dataset.confirmed === '1') return; const sub = e.submitter; if (sub && sub.dataset.confirm === 'off') return; e.preventDefault(); const ok = await showModal({ title: (sub && sub.dataset.title) || form.dataset.title || '确认修改', okText: (sub && sub.dataset.ok) || '确认保存', okClass: sub && sub.dataset.danger === '1' ? 'btn danger' : 'btn primary', body: '<p class="modal-text">' + ((sub && sub.dataset.msg) || form.dataset.msg || '确认保存本次修改？') + '</p>' }); if (ok) { form.dataset.confirmed = '1'; form.submit(); } }); });
+
+  window.showFieldError = function (msg) {
+    let el = document.querySelector('#modalBody .modal-error');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'modal-error';
+      document.getElementById('modalBody').prepend(el);
+    }
+    el.textContent = msg;
+  };
+
+  /** 充值弹窗：输入金额 → 确认 / 取消 */
+  window.rechargeAccount = async function (id, phone, balance, totalRecharged, daily) {
+    const bal = Number(balance) || 0;
+    const total = Number(totalRecharged) || 0;
+
+    const result = await showModal({
+      title: '给 ' + phone + ' 充值',
+      okText: '确认充值',
+      body: `
+        <div class="modal-field">
+          <label>充值金额（元）</label>
+          <input id="rechargeAmount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+          <div class="quick-amounts">
+            <button type="button" class="btn tiny ghost" data-amt="100">+100</button>
+            <button type="button" class="btn tiny ghost" data-amt="200">+200</button>
+            <button type="button" class="btn tiny ghost" data-amt="500">+500</button>
+          </div>
+        </div>
+        <div class="modal-preview">
+          <div><span>当前余额</span><strong>¥${bal.toFixed(2)}</strong></div>
+          <div><span>充值后余额</span><strong id="mNewBalance">¥${bal.toFixed(2)}</strong></div>
+          <div><span>累计充值</span><strong>¥${total.toFixed(2)}</strong></div>
+          <div><span>每日扣款</span><strong>¥${(Number(daily) || 0).toFixed(2)}</strong></div>
+        </div>`,
+      onMount: () => {
+        const input = document.getElementById('rechargeAmount');
+        const upd = () => {
+          const amt = parseFloat(input.value) || 0;
+          document.getElementById('mNewBalance').textContent = '¥' + (bal + amt).toFixed(2);
+        };
+        input.addEventListener('input', upd);
+        document.querySelectorAll('.quick-amounts [data-amt]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const cur = parseFloat(input.value) || 0;
+            input.value = (cur + parseFloat(btn.dataset.amt)).toFixed(2);
+            upd();
+            input.focus();
+          });
+        });
+        input.focus();
+      },
+      onOk: () => {
+        const amt = parseFloat(document.getElementById('rechargeAmount').value);
+        if (!amt || amt <= 0) { showFieldError('请输入大于 0 的充值金额'); return false; }
+        return amt;
+      },
+    });
+
+    if (!result) return;
+
+    const fd = new FormData();
+    fd.append('amount', result);
+    fd.append('note', '页面充值');
+    const res = await fetch('/api/accounts/' + id + '/recharge', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      await showModal({
+        title: '充值失败',
+        okText: '知道了', hideCancel: true,
+        body: '<p class="modal-text modal-error">' + (data.error || '未知错误') + '</p>',
+      });
+      return;
+    }
+    await showModal({
+      title: '充值成功',
+      okText: '知道了', hideCancel: true,
+      body: '<div class="modal-preview">'
+        + '<div><span>本次充值</span><strong>¥' + data.amount.toFixed(2) + '</strong></div>'
+        + '<div><span>剩余余额</span><strong>¥' + data.balance.toFixed(2) + '</strong></div>'
+        + '<div><span>累计充值</span><strong class="hl">¥' + data.total_recharged.toFixed(2) + '</strong></div>'
+        + '<div><span>每日扣款</span><strong>¥' + (Number(daily) || 0).toFixed(2) + '</strong></div>'
+        + '</div>',
+    });
+    location.reload();
+  };
+
+  /** 删除账号 */
+  window.deleteAccount = async function (id) {
+    const ok = await showModal({
+      title: '删除账号',
+      okText: '确认删除', okClass: 'danger',
+      body: '<p class="modal-text">确定删除这条记录？相关的流水和提醒会一并删除，且无法恢复。</p>',
+    });
+    if (!ok) return;
+    const res = await fetch('/accounts/' + id + '/delete', { method: 'POST' });
+    if (res.ok || res.redirected) location.href = '/';
+    else alert('删除失败');
+  };
+
+  /** 标记异常：六选一的原因 */
+  window.markAbnormal = async function (id, phone) {
+    const reasons = window.ABNORMAL_REASONS || {};
+    const options = Object.entries(reasons).map(([key, label], i) => `
+      <label class="radio-row">
+        <input type="radio" name="abnReason" value="${key}" ${i === 0 ? 'checked' : ''}>
+        <span>${label}</span>
+      </label>`).join('');
+
+    const result = await showModal({
+      title: '标记异常：' + phone,
+      okText: '标记为异常',
+      okClass: 'danger',
+      body: `
+        <p class="modal-text">选一条异常原因，标记后这条线会移到「异常账号」页。</p>
+        <div class="radio-list">${options}</div>
+        <div class="modal-field">
+          <label>补充说明（可留空）</label>
+          <input id="abnNote" type="text" placeholder="例如：机房断电两小时">
+        </div>`,
+      onOk: () => {
+        const picked = document.querySelector('#modalBody input[name="abnReason"]:checked');
+        if (!picked) { showFieldError('请选一个异常原因'); return false; }
+        const note = document.getElementById('abnNote');
+        return { reason: picked.value, note: note ? note.value : '' };
+      },
+    });
+    if (!result) return;
+
+    const fd = new FormData();
+    fd.append('reason', result.reason);
+    fd.append('note', result.note);
+    const res = await fetch('/accounts/' + id + '/abnormal', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '标记失败'); return; }
+    location.reload();
+  };
+
+  /** 恢复正常 */
+  window.restoreAccount = async function (id, phone) {
+    const ok = await showModal({
+      title: '恢复正常',
+      okText: '确认恢复',
+      body: `<p class="modal-text">确定把 ${phone} 移回「正常账号」？异常原因会被清掉。</p>`,
+    });
+    if (!ok) return;
+    const res = await fetch('/accounts/' + id + '/restore', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || data.error) { alert(data.error || '恢复失败'); return; }
+    location.reload();
+  };
+
+  /** 表单提交前的确认窗口 */
+  document.querySelectorAll('form[data-confirm]').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      if (form.dataset.confirmed === '1') return;
+      const sub = e.submitter;
+      if (sub && sub.dataset.confirm === 'off') return;  // 这个按钮不改动数据，不用确认
+      e.preventDefault();
+      const ok = await showModal({
+        title: (sub && sub.dataset.title) || form.dataset.title || '确认修改',
+        okText: (sub && sub.dataset.ok) || '确认保存',
+        okClass: sub && sub.dataset.danger === '1' ? 'btn danger' : 'btn primary',
+        body: '<p class="modal-text">' + ((sub && sub.dataset.msg) || form.dataset.msg || '确认保存本次修改？') + '</p>',
+      });
+      if (ok) { form.dataset.confirmed = '1'; form.submit(); }
+    });
+  });
 })();
-window.showVeil = function() { const v = document.getElementById('kdVeil'); if(!v) return; v.classList.add('active'); setTimeout(() => v.classList.remove('active'), 300); };
-window.addEventListener('DOMContentLoaded', () => { const links = document.querySelectorAll('.nav a, .btn'); links.forEach(l => l.addEventListener('click', (e) => { if(l.getAttribute('href') && !l.getAttribute('target') && !e.ctrlKey && !e.metaKey) { showVeil(); } })); });
+
+  window.showVeil = function() {
+    const v = document.getElementById('kdVeil');
+    if(!v) return;
+    v.classList.add('active');
+    setTimeout(() => v.classList.remove('active'), 300);
+  };
+  window.addEventListener('DOMContentLoaded', () => {
+    const links = document.querySelectorAll('.nav a, .btn');
+    links.forEach(l => l.addEventListener('click', (e) => {
+      if(l.getAttribute('href') && !l.getAttribute('target') && !e.ctrlKey && !e.metaKey) {
+        showVeil();
+      }
+    }));
+  });
+
 </script>
 </body>
 </html>
