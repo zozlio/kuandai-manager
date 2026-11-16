@@ -11,6 +11,9 @@
 
 [![首页看板](preview/dashboard.svg)](preview/dashboard.svg)
 
+> 📱 **同项目还有 Android 手机版** → [zozlio/kuandai-manager-android](https://github.com/zozlio/kuandai-manager-android)
+> 离线单机、每日自动扣费、AI 识图填库 —— 不用装 Docker、不用开电脑，给宽带代办点 / 运维人员随身记账。
+
 给宽带代办点 / 运维人员用：把每个电话号码绑定的宽带账号、注册码、注册人、注册时间、套餐费和剩余金额集中记下来，系统**每天按套餐自动扣一点余额**、余额不够自动生成催缴提醒，还能直接用大白话问 AI、传一张收益截图让 AI 帮你记账。
 
 **当前版本 v1.2.0** ｜ 改动明细与升级步骤见 [CHANGELOG.md](CHANGELOG.md)
